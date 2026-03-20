@@ -1,3 +1,11 @@
+# derived data and results 
+/derived_data/
+/results/
+/figures/
+
+# files being processed 
+/to_delete_or_process/
+
 # History files
 .Rhistory
 .Rapp.history
