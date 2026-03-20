@@ -1,5 +1,7 @@
 # CoV-immune
 
+NOTE 3/20/26: this repo is in progress
+
 Environment prep
 -----------------------
 
