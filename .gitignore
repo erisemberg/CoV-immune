@@ -6,6 +6,9 @@
 # files being processed 
 /to_delete_or_process/
 
+# irrelevant files 
+.DS_Store
+
 # History files
 .Rhistory
 .Rapp.history
