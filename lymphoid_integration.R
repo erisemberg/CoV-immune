@@ -1,8 +1,5 @@
-#library(dplyr)
-#library(stringr)
-#library(tidyr)
 library(tidyverse)
-library(readxl) # need to load explicitly even though installed with tidyverse
+library(readxl) 
 library(lme4)
 
 # load all lymphoid datasets (see Summary tab in spreadsheet for details) 
@@ -12,7 +9,7 @@ lymph22 <- read_xlsx('source_data/lymphoid-combined.xlsx', sheet = '010322-LYMPH
                      na = c('not measured', 'not assayed', 'not tested', ""))
 lymphkk <- read_xlsx('source_data/lymphoid-combined.xlsx', sheet = 'KK-combined')
 
-# split up DATE_SAMPLE column into date and sample number columns 
+# function to split up DATE_SAMPLE column into date and sample number columns 
 split_date_sample <- function(df, date_sample_col){
   date_sample <- df[,date_sample_col]
   df$DATE <- str_split_fixed(date_sample[[1]], "_", 2)[,1]
@@ -137,16 +134,16 @@ res$beta <- as.numeric(res$beta)
 res$pval <- as.numeric(res$pval)
 
 # plot betas and pvals by color (KJ2 vs KJ2 = red, KJ2 vs KK = blue)
-plot(res[which(res$comparison == 'KJ1 vs KJ2'),'beta'], 
-     -log10(res[which(res$comparison == 'KJ1 vs KJ2'),'pval']), 
-     col = 'red',
-     xlim = c(0,16), 
-     xlab = "Beta",
-     ylab = "-log10(p)")
-
-points(res[which(res$comparison == 'KJ1 vs KK'),'beta'], 
-       -log10(res[which(res$comparison == 'KJ1 vs KK'),'pval']), 
-       col = 'blue')
+# plot(res[which(res$comparison == 'KJ1 vs KJ2'),'beta'], 
+#      -log10(res[which(res$comparison == 'KJ1 vs KJ2'),'pval']), 
+#      col = 'red',
+#      xlim = c(0,16), 
+#      xlab = "Beta",
+#      ylab = "-log10(p)")
+# 
+# points(res[which(res$comparison == 'KJ1 vs KK'),'beta'], 
+#        -log10(res[which(res$comparison == 'KJ1 vs KK'),'pval']), 
+#        col = 'blue')
 
 # Interpretation:
 # most phenotypes show a highly correlated cluster around the y=x line. Some 

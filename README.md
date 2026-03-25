@@ -4,9 +4,7 @@ NOTE 3/20/26: this repo is in progress
 
 Environment prep
 -----------------------
-
-# update R version
-This project uses a Docker container to produce an environment similar to that used in the original analysis (e.g. R v4.2.1 and R package versions available on August 1, 2023). In order to run this container you will need [Docker](https://docs.docker.com/get-docker/) installed. 
+This project uses a Docker container to produce an environment similar to that used in the original analysis (e.g. R v4.4.1 and R package versions available in March, 2026). In order to run this container you will need [Docker](https://docs.docker.com/get-docker/) installed. 
 
 Build the docker container:
 
