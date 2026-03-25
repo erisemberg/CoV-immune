@@ -22,9 +22,8 @@
 # Note: this script does not yet include any filtering/handling of Y/MT/PAR markers
 
 library(tidyverse)
-library(readxl) # need to load explicitly even though installed with tidyverse
-library(stringi)
-source("/Users/ellenrisemberg/Documents/ValdarFerris/scripts/qtl_functions.R")
+library(readxl) 
+source("code-dependencies/cov_qtl_functions.R")
 
 ensure_directory("derived_data")
 ensure_directory("derived_data/data_processing")

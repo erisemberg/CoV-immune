@@ -1,8 +1,9 @@
+library(readxl)
 library(qtl)
 library(car)
-library(lme4)
+library(lme4qtl)
 library(AGHmatrix)
-source("/Users/ellenrisemberg/Documents/ValdarFerris/scripts/qtl_functions.R")
+source("code-dependencies/cov_qtl_functions.R")
 
 # -------------------------process phenotype data----------------------------- #
 # load original cross_data in as regular df
