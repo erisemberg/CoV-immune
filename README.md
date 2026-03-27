@@ -41,8 +41,30 @@ Prepare Rqtl file from genotype data (`source_data/Cr_RB05_miniMUGA-013024_padde
 Rscript rqtl_file_prep.R
 ```
 
-Prepare dataset for non-Rqtl analyses (with data transformed, centered/scaled, etc.)
+Prepare dataset with transformed and centered/scaled phenotypes (`derived_data/cross_data.csv`), as well as an `Rqtl` cross object with imputed genotypes. 
 
 ```
 Rscript data_processing.R
 ```
+
+Run the following script to produce a version of the dataset with missing immune trait data imputed, which will be stored in `derived_data/cross_data_flow_imp.csv`. Set `--compareCV=TRUE` to run cross-validation (CV) on the following imputation models:
+
+Set `--runCV=TRUE` to run cross-validation using chosen imputation method, method (2). 
+
+```
+Rscript rqtl_file_proc.R --args --runCV=FALSE --compareCV=FALSE
+```
+
+Variable selection 
+-----------------------
+
+
+EDA 
+-----------------------
+
+QTL mapping  
+-----------------------
+
+Mediation analysis  
+-----------------------
+

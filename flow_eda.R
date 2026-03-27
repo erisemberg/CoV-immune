@@ -10,8 +10,7 @@ library(cowplot)
 library(RColorBrewer)
 library(xgboost)
 library(ggplot2)
-source("/Users/ellenrisemberg/Documents/ValdarFerris/scripts/qtl_functions.R")
-setwd("/Users/ellenrisemberg/Documents/ValdarFerris/Coronavirus/cov-immune/")
+source("code-dependencies/cov_qtl_functions.R")
 
 # ---------------------------------Load data---------------------------------- #
 # raw data
@@ -21,9 +20,6 @@ cross <- read.cross(format = "csv",
                     genotypes=c("AA","AB","BB"),
                     alleles=c("A","B")) # A = CC006, B = CC044
 cross <- jittermap(cross)
-# first remove mice with any NA weights
-# mice_w_NAweights <- (rowSums(is.na(cross$pheno[,c("d0", "d1", "d2", "d3", "d4")])) > 0)
-# cross <- subset(cross, ind = !mice_w_NAweights)
 
 # define flow cols 
 pheno_names <- read_xlsx("source_data/pheno_names.xlsx")
