@@ -57,7 +57,7 @@ Run the following script to produce a version of the dataset with missing immune
 Set `--runCV=TRUE` to run cross-validation on only the chosen imputation method, method (2). 
 
 ```
-Rscript rqtl_file_proc.R --args --runCV=FALSE --compareCV=FALSE
+Rscript imputation.R --args --runCV=FALSE --compareCV=FALSE
 ```
 
 Variable selection 
