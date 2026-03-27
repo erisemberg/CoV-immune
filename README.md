@@ -53,6 +53,7 @@ Run the following script to produce a version of the dataset with missing immune
 3. Bayesian imputation based on $\Sigma$, fixed effect covariates and random polygenic effect 
 4. Random Forest (RF) imputation with genotypes 
 5. RF imputation without genotypes 
+
 Set `--runCV=TRUE` to run cross-validation on only the chosen imputation method, method (2). 
 
 ```
