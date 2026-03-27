@@ -156,31 +156,31 @@ if (comp_cv){
                        nu0 = nu0, B0 = B0, V0 = V0, X = X, Sg0 = Sg0, nug0 = nu0)
   
   # --------------------imputation with random batch effects-------------------- #
-  # define priors / hyperparameters
-  Xr <- X[,-1]
-  p <- ncol(Xr)
-  
-  nu_tau0 <- q + 3
-  c <- 0.3 # prior batch SD per trait
-  S_tau0 <- (nu_tau0 - q - 1) * (c^2) * diag(q)
-  
-  batch <- as.factor(cross_data$flow_batch[mice_w_any_flow]) # length n (int))
-  recode_df <- data.frame(original = levels(as.factor(batch)),
-                          new = seq(1, length(levels(as.factor(batch)))))
-  recoded_batch <- as.data.frame(batch) %>%
-    mutate(batch = as.character(batch)) %>%                    
-    left_join(recode_df %>% mutate(original = as.character(original)),
-              by = c("batch" = "original")) %>%
-    mutate(batch_int = as.integer(new)) %>%                    
-    select(-new)
-  batch <- recoded_batch$batch_int
-  
-  # run 10-fold cross-validation 
-  cv_res3 <- impute_cv(chain_fn_name = "run_chain3", Y = flow, K = 10, S = 1000,
-                       chains = 4, seed = 123, ncores = 4, 
-                       S0 = S0, nu0 = nu0, B0 = B0, V0 = V0, X = Xr,
-                       nu_tau0 = nu_tau0, S_tau0 = S_tau0, batch = batch)
-  cv_res3$per_fold
+  # # define priors / hyperparameters
+  # Xr <- X[,-1]
+  # p <- ncol(Xr)
+  # 
+  # nu_tau0 <- q + 3
+  # c <- 0.3 # prior batch SD per trait
+  # S_tau0 <- (nu_tau0 - q - 1) * (c^2) * diag(q)
+  # 
+  # batch <- as.factor(cross_data$flow_batch[mice_w_any_flow]) # length n (int))
+  # recode_df <- data.frame(original = levels(as.factor(batch)),
+  #                         new = seq(1, length(levels(as.factor(batch)))))
+  # recoded_batch <- as.data.frame(batch) %>%
+  #   mutate(batch = as.character(batch)) %>%                    
+  #   left_join(recode_df %>% mutate(original = as.character(original)),
+  #             by = c("batch" = "original")) %>%
+  #   mutate(batch_int = as.integer(new)) %>%                    
+  #   select(-new)
+  # batch <- recoded_batch$batch_int
+  # 
+  # # run 10-fold cross-validation 
+  # cv_res3 <- impute_cv(chain_fn_name = "run_chain3", Y = flow, K = 10, S = 1000,
+  #                      chains = 4, seed = 123, ncores = 4, 
+  #                      S0 = S0, nu0 = nu0, B0 = B0, V0 = V0, X = Xr,
+  #                      nu_tau0 = nu_tau0, S_tau0 = S_tau0, batch = batch)
+  # cv_res3$per_fold
   
   # -------------imputation with horseshoe-shrunk genetic effects------------- #
   # # define priors / hyperparameters
