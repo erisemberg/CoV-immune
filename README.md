@@ -47,18 +47,22 @@ Prepare dataset with transformed and centered/scaled phenotypes (`derived_data/c
 Rscript data_processing.R
 ```
 
-Run the following script to produce a version of the dataset with missing immune trait data imputed, which will be stored in `derived_data/cross_data_flow_imp.csv`. Set `--compareCV=TRUE` to run cross-validation (CV) on the following imputation models:
+Run the following script to produce a version of the dataset with missing immune trait data imputed, which will be stored in `derived_data/cross_data_flow_imp.csv`.  
+
+```
+Rscript imputation.R --args --runCV=FALSE --compareCV=FALSE
+```
+
+<!--
+Set `--compareCV=TRUE` to run cross-validation (CV) on the following imputation models:
 1. Bayesian imputation based on immune trait variance-covariance matrix $\Sigma$ only 
 2. Bayesian imputation based on $\Sigma$ and fixed effect covariates (sex, infection)
 3. Bayesian imputation based on $\Sigma$, fixed effect covariates and random polygenic effect 
 4. Random Forest (RF) imputation with genotypes 
 5. RF imputation without genotypes 
 
-Set `--runCV=TRUE` to run cross-validation on only the chosen imputation method, method (2). 
-
-```
-Rscript imputation.R --args --runCV=FALSE --compareCV=FALSE
-```
+Set `--runCV=TRUE` to run cross-validation on only the chosen imputation method, method (2).
+-->
 
 Variable selection 
 -----------------------

@@ -62,7 +62,7 @@ make_cellwise_folds <- function(O_base, K = 10, seed = 123, keep_one_per_row = T
 # function to run $K$-fold cross-validation
 impute_cv <- function(Y, K = 10, seed = 123, 
                       RF = FALSE, X = NULL, geno_imp = NULL,
-                      chain_fn_name = NULL, chains = 4, ncores = chains, S = 1000, 
+                      chain_fn_name = NULL, nchains = 4, ncores = nchains, S = 1000, 
                       mu0 = NULL, L0 = NULL, S0 = NULL, nu0 = NULL, M0 = NULL, 
                       Lambda0 = NULL, G = NULL, Sg0 = NULL, nug0 = NULL,
                       v_fixed = NULL, p0 = NULL, tau2 = NULL, lambda2 = NULL, 
@@ -132,7 +132,7 @@ impute_cv <- function(Y, K = 10, seed = 123,
     } else { # Bayesian imputation 
       cl <- makeCluster(ncores)
       registerDoParallel(cl)
-      chain_res <- foreach(ch = 1:chains, 
+      chain_res <- foreach(ch = 1:nchains, 
                            .export = exported_vars, 
                            .packages = c("mvtnorm")) %dopar% chain_fn(ch)
       stopCluster(cl)

@@ -1,12 +1,22 @@
 library(readr)
 library(readxl)
-library(mvtnorm)
+library(parallel)
+library(doParallel)
+library(foreach)
 library(AGHmatrix)
+#library(mvtnorm)
 #source("code-dependencies/cov_qtl_functions.R")
 source("code-dependencies/cmdline.R")
 source("code-dependencies/gibbs_functions.R")
 
 # ---------------------------------load data---------------------------------- #
+Sys.setenv(OMP_NUM_THREADS = "1",
+           OPENBLAS_NUM_THREADS = "1",
+           MKL_NUM_THREADS = "1",
+           BLIS_NUM_THREADS = "1",
+           VECLIB_MAXIMUM_THREADS = "1",
+           NUMEXPR_NUM_THREADS = "1")
+
 run_cv <- cmdline.logical("runCV", default = FALSE)
 comp_cv <- cmdline.logical("compareCV", default = FALSE)
 
@@ -59,38 +69,47 @@ n <- nrow(flow)
 p <- ncol(X)
 
 # prior hyperparameters 
-S0 <- diag(q) * (nu0 - q - 1)
 nu0 <- q + 2
+S0 <- diag(q) * (nu0 - q - 1)
 M0 <- matrix(0, p, q) # initialize beta_imp and set B0 (prior mean) - ((p-1) x q) matrix 
 Lambda0 <- diag(p)*n # large variance / tune as desired ### try diag(1,k)
 
-S <- 3000
-burn_in <- 300
+S <- 100 
+burn_in <- 10 
 seed = 123
-ncores <- chains <- 4
+
+ncores <- min(4L, parallel::detectCores(logical = FALSE)) # 4 if available
+nchains <- ncores
 
 Y <- flow
 O <- matrix(1L, n, q) # O indicates whether data is observed or missing
 O[is.na(Y)] <- 0L 
 
-# run 4 chains 
-cl <- makeCluster(ncores)
-registerDoParallel(cl)
-imp_res1 <- foreach(ch = 1:chains, .packages = c("mvtnorm")) %dopar% run_chain1(ch)
-stopCluster(cl)
-
-# take posterior mean for imputed dataset 
-flow_miss1 <- do.call(rbind, lapply(imp_res1, function(x) x$flow_miss))
-flow_miss1_means <- colMeans(flow_miss1)
-flow_imp <- flow
-flow_imp[is.na(flow_imp)] <- flow_miss1_means
-colnames(flow_imp) <- paste0(colnames(flow), "_imp")
-
-# create data frame for QTL mapping 
-cross_dataI <- cross_data[mice_w_any_flow,]
-cross_dataI <- cbind(cross_dataI, flow_imp)
-write_csv(cross_dataI, "derived_data/cross_data_flow_imp.csv")
-
+imp_fname <- "derived_data/cross_data_flow_imp.csv"
+if (file.exists(imp_fname)){
+  message(paste0(imp_fname, " already exists, skipping data imputation."))
+} else {
+  message(paste("Imputing with", nchains, "chains in parallel for", S, "iterations each..."))
+  
+  # run 4 chains 
+  cl <- makeCluster(ncores, type = "PSOCK", master = "host.docker.internal")
+  registerDoParallel(cl)
+  imp_res1 <- foreach(ch = 1:nchains, .packages = c("mvtnorm")) %dopar% run_chain1(ch)
+  stopCluster(cl)
+  
+  # take posterior mean for imputed dataset 
+  flow_miss1 <- do.call(rbind, lapply(imp_res1, function(x) x$flow_miss))
+  flow_miss1_means <- colMeans(flow_miss1)
+  flow_imp <- flow
+  flow_imp[is.na(flow_imp)] <- flow_miss1_means
+  colnames(flow_imp) <- paste0(colnames(flow), "_imp")
+  
+  # create data frame for QTL mapping 
+  cross_dataI <- cross_data[mice_w_any_flow,]
+  cross_dataI <- cbind(cross_dataI, flow_imp)
+  write_csv(cross_dataI, imp_fname)
+  print(paste0("Imputed dataset saved to ", imp_fname, "."))
+}
 
 # ------------------------------cross-validation------------------------------ #  
 S <- 1000 
@@ -108,7 +127,7 @@ if (run_cv | comp_cv){
   
   # 10-fold cross_validation
   cv_res1 <- impute_cv(chain_fn_name = "run_chain1", Y = flow, K = 10, S = 1000, X = X,
-                       chains = 4, seed = 123, ncores = 4, 
+                       nchains = 4, seed = 123, ncores = 4, 
                        S0 = S0, nu0 = nu0, M0 = M0, Lambda0 = Lambda0)
   cv_res1$per_fold  
 }
@@ -130,7 +149,7 @@ if (comp_cv){
   
   # run 10-fold cross-validation
   cv_res0 <- impute_cv(chain_fn_name = "run_chain0", Y = flow, K = 10, S = 1000, 
-                       chains = 4, mu0 = mu0, L0 = L0, S0 = L0, nu0 = nu0,
+                       nchains = 4, mu0 = mu0, L0 = L0, S0 = L0, nu0 = nu0,
                        seed = 123, ncores = 4)
   
   # compare predicted values from cross-validation code to those from original code 
@@ -152,7 +171,7 @@ if (comp_cv){
   
   # pass in variables that are passed into run_chain1 as well as ones above 
   cv_res2 <- impute_cv(chain_fn_name = "run_chain2", Y = flow, K = 10, S = 1000, 
-                       G = G, chains = 4, ncores = 4, seed = 123, S0 = S0, 
+                       G = G, nchains = 4, ncores = 4, seed = 123, S0 = S0, 
                        nu0 = nu0, B0 = B0, V0 = V0, X = X, Sg0 = Sg0, nug0 = nu0)
   
   # --------------------imputation with random batch effects-------------------- #
@@ -177,7 +196,7 @@ if (comp_cv){
   # 
   # # run 10-fold cross-validation 
   # cv_res3 <- impute_cv(chain_fn_name = "run_chain3", Y = flow, K = 10, S = 1000,
-  #                      chains = 4, seed = 123, ncores = 4, 
+  #                      nchains = 4, seed = 123, ncores = 4, 
   #                      S0 = S0, nu0 = nu0, B0 = B0, V0 = V0, X = Xr,
   #                      nu_tau0 = nu_tau0, S_tau0 = S_tau0, batch = batch)
   # cv_res3$per_fold
@@ -199,7 +218,7 @@ if (comp_cv){
   # 
   # # run 10-fold CV 
   # cv_res4 <- impute_cv(chain_fn_name = "run_chain4", Y = flow, K = 10, seed = 123, 
-  #                      S = 1000, chains = 4, ncores = 4, X = Xall, B0 = B0, 
+  #                      S = 1000, nchains = 4, ncores = 4, X = Xall, B0 = B0, 
   #                      v_fixed = v_fixed, p0 = p0, tau2 = tau2, lambda2 = lambda2,
   #                      Psi0 = Psi0, nu0 = nu0, nu_aux = nu_aux, m = m, xi_aux = xi_aux)
   
