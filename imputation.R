@@ -4,8 +4,6 @@ library(parallel)
 library(doParallel)
 library(foreach)
 library(AGHmatrix)
-#library(mvtnorm)
-#source("code-dependencies/cov_qtl_functions.R")
 source("code-dependencies/cmdline.R")
 source("code-dependencies/gibbs_functions.R")
 
