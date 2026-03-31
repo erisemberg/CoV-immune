@@ -9,15 +9,18 @@ cmdline.getCommandArgs <- function(){
   pkg.globals$cmdArgs
 }
 
-cmdline.integer <- function(key, ...)
+cmdline.integer <- function(key, default = NULL, ...)
   # return the value part of a command line option as an integer
 {
-  cmdline.integers(key, ..., howmany=1)
+  cmdline.integers(key, default = default, ..., howmany=1)
 }
 
-cmdline.integers <- function(key, ...){
-  s <- cmdline.strings(key, ...)
-  if (!is.null(s)) return (as.integer(s))
+cmdline.integers <- function(key, default = NULL, ...){
+  s <- cmdline.strings(key, default = default, ...)
+  if (!is.null(s)){
+    if (identical(s, default)) return(default)
+    return (as.integer(s))
+  } 
 }
 
 cmdline.flag <- function(name)
@@ -27,17 +30,18 @@ cmdline.flag <- function(name)
   0 != length(grep(paste("^--",name,"$", sep=""), commandArgs(trailingOnly=TRUE)))
 }
 
-cmdline.logical <- function(key, ...)
+cmdline.logical <- function(key, default = NULL, ...)
   # return value part of command line option as numeric
 {
-  cmdline.logicals(key, ..., howmany=1)
+  cmdline.logicals(key, default = default, ..., howmany=1)
 }
 
-cmdline.logicals <- function(key, ...)
+cmdline.logicals <- function(key, default = NULL, ...)
   # return value part of command line option as numeric
 {
-  s <- cmdline.strings(key,...)
-  if (!is.null(s)){           
+  s <- cmdline.strings(key, default = default, ...)
+  if (!is.null(s)){       
+    if (identical(s, default)) return(default)
     ints=integer(length(s))
     for (i in 1:length(s)){
       ints[i] = as.logical(as.integer(switch(s[i], "T"=1, "F"=0, "TRUE"=1, "FALSE"=0, s[i])))
@@ -46,17 +50,20 @@ cmdline.logicals <- function(key, ...)
   }
 }
 
-cmdline.numeric <- function(key, ...)
+cmdline.numeric <- function(key, default = NULL, ...)
   # return value part of command line option as numeric
 {
-  cmdline.numerics(key, ..., howmany=1)
+  cmdline.numerics(key, default = default, ..., howmany=1)
 }
 
-cmdline.numerics <- function(key, ...)
+cmdline.numerics <- function(key, default = NULL, ...)
   # return value part of command line option as numeric
 {
-  s <- cmdline.strings(key, ...)
-  if (!is.null(s)) return (as.numeric(s))
+  s <- cmdline.strings(key, default = default, ...)
+  if (!is.null(s)){
+    if (identical(s, default)) return(default)
+    return (as.numeric(s))
+  } 
 }
 
 

@@ -61,7 +61,7 @@ Set `--runCV=TRUE` to run cross-validation on only the chosen imputation method,
 -->
 
 ```
-Rscript imputation.R --args --runCV=FALSE --compareCV=FALSE
+Rscript imputation.R
 ```
 
 # Data analysis 
