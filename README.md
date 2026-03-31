@@ -65,7 +65,6 @@ Rscript imputation.R --args --runCV=FALSE --compareCV=FALSE
 ```
 
 # Data analysis 
------------------------
 
 Perform variance component analysis on a high-performance computing cluster using SLURM (requests 106 CPUs to run in parallel by trait):
 
@@ -87,8 +86,6 @@ Perform miscellaneous analyses/visualizations on trait data.
 ```
 Rscript trait_eda.R
 ```
-
-<!--BEFORE RUNNING flow_eda.R, CREATE var_comp_res.csv-->
 
 
 Variable selection 
