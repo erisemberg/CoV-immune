@@ -40,10 +40,12 @@ cross_data <- read_csv("derived_data/cross_data.csv")
 cross_data$infection <- as.factor(cross_data$infection)
 geno <- cross_data[,c(which(colnames(cross_data) == "gUNC145909"):which(colnames(cross_data) == "mJAX00187167"))]
 cross_dataI <- read_csv("derived_data/cross_data_flow_imp.csv", show_col_types = FALSE) # processed and imputed data 
+flow_imp <- cross_dataI[,paste0(flow_cols, "_imp")]
 
 # figures 
 ensure_directory("figures")
 ensure_directory("figures/supplemental")
+strat_groups <- c("PBS", "SARSCoV", "SARS2CoV")
 inf_pal <- list("PBS" = "#66C2A5", "SARSCoV" = "#FC8D62", "SARS2CoV" = "#8DA0CB")
 grouplabels = list("PBS" = "Control", "SARSCoV" = "SARS-CoV", "SARS2CoV" = "SARS-CoV-2")
 
@@ -69,13 +71,13 @@ VHdf <- data.frame(phenotype = character(),
                    infSexVH = numeric())
 inf_var_g <- 0
 for (i in 1:q){
-  inf_vh_p <- leveneTest(flow[,i], as.factor(cross_dataI$infection))$`Pr(>F)`[1]
-  sex_vh_p <- leveneTest(flow[,i], as.factor(cross_dataI$sex))$`Pr(>F)`[1]
-  int_vh_p <- leveneTest(flow[,i], interaction(cross_dataI$infection, cross_dataI$sex))$`Pr(>F)`[1]
+  inf_vh_p <- leveneTest(flow_imp[[i]], as.factor(cross_dataI$infection))$`Pr(>F)`[1]
+  sex_vh_p <- leveneTest(flow_imp[[i]], as.factor(cross_dataI$sex))$`Pr(>F)`[1]
+  int_vh_p <- leveneTest(flow_imp[[i]], interaction(cross_dataI$infection, cross_dataI$sex))$`Pr(>F)`[1]
   VHdf[i,] <- c(flow_cols[i], inf_vh_p, sex_vh_p, int_vh_p)
   
-  var0 <- var(flow[cross_dataI$infection == "PBS", i], na.rm = TRUE)
-  var12 <- var(flow[cross_dataI$infection %in% c("SARSCoV", "SARS2CoV"), i], na.rm = TRUE)
+  var0 <- var(flow_imp[[i]][cross_dataI$infection == "PBS"], na.rm = TRUE)
+  var12 <- var(flow_imp[[i]][cross_dataI$infection %in% c("SARSCoV", "SARS2CoV")], na.rm = TRUE)
   if (inf_vh_p <= 0.05 & var12 > var0){
     inf_var_g <- inf_var_g + 1
   }
@@ -117,6 +119,7 @@ imp_df$overall <- rowSums(imp_df)
 imp_df$phenotype <- rownames(imp_df)
 imp_df <- imp_df[order(imp_df$overall, decreasing = TRUE),]
 
+ensure_directory("results")
 ensure_directory("results/var_selection")
 ensure_directory("results/var_selection/frequentist")
 write_csv(imp_df, "results/var_selection/frequentist/glmnet_var_importance.csv")
@@ -172,7 +175,7 @@ df_plot <- df_long %>%
   group_by(infection, subset, state) %>%
   summarise(mean_prop = mean(prop_norm, na.rm = TRUE), .groups = "drop")
 
-ggplot(df_plot, aes(x = infection, y = mean_prop, fill = state)) +
+Tplot <- ggplot(df_plot, aes(x = infection, y = mean_prop, fill = state)) +
   geom_col(width = 0.7) +
   coord_flip() +
   facet_wrap(~ subset, ncol = 1) +

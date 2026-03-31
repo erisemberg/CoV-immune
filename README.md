@@ -47,11 +47,7 @@ Prepare dataset with transformed and centered/scaled phenotypes (`derived_data/c
 Rscript data_processing.R
 ```
 
-Run the following script to produce a version of the dataset with missing immune trait data imputed, which will be stored in `derived_data/cross_data_flow_imp.csv`.  
-
-```
-Rscript imputation.R --args --runCV=FALSE --compareCV=FALSE
-```
+Produce a version of the dataset with missing immune trait data imputed, which will be stored in `derived_data/cross_data_flow_imp.csv`.  
 
 <!--
 Set `--compareCV=TRUE` to run cross-validation (CV) on the following imputation models:
@@ -63,6 +59,37 @@ Set `--compareCV=TRUE` to run cross-validation (CV) on the following imputation 
 
 Set `--runCV=TRUE` to run cross-validation on only the chosen imputation method, method (2).
 -->
+
+```
+Rscript imputation.R --args --runCV=FALSE --compareCV=FALSE
+```
+
+# Data analysis 
+-----------------------
+
+Perform variance component analysis on a high-performance computing cluster using SLURM (requests 106 CPUs to run in parallel by trait):
+
+```
+sbatch vc.sh
+```
+
+or locally (runs in parallel using available CPUs):
+
+```
+Rscript var_comp.R
+```
+
+Perform miscellaneous analyses/visualizations on trait data. 
+* Levene's test for variance heterogeneity 
+* Classification of infection group by immune trait data with `glmnet` and random forest 
+* Create Figure 1 and Supp. Figure 1 
+
+```
+Rscript trait_eda.R
+```
+
+<!--BEFORE RUNNING flow_eda.R, CREATE var_comp_res.csv-->
+
 
 Variable selection 
 -----------------------

@@ -1,4 +1,4 @@
-FROM rocker/verse:4.4.1
+FROM rocker/verse:4.4.0
 
 # Install R packages
 RUN R -e "install.packages('tidyverse')"
