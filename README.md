@@ -87,10 +87,12 @@ Perform miscellaneous analyses/visualizations on trait data.
 Rscript trait_eda.R
 ```
 
+## Variable selection 
+Perform variable selection (computationally intensive) and generate Figure 2:
 
-Variable selection 
------------------------
-
+```
+Rscript var_selection.R 
+```
 
 EDA 
 -----------------------

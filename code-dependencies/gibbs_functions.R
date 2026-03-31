@@ -26,6 +26,44 @@ load_cross_as_df <- function(file_name, n_geno_start){
   return(cross_data)
 }
 
+bayes_R2 <- function(res, y, X, flow, resid_based = FALSE){
+  n <- length(y)
+  r2_all <- vector("list", length(res_dnm)) 
+  
+  for (ch in seq_along(res)){
+    res_ch <- res[[ch]]
+    nsave <- length(res_ch$sigma2)
+    miss_ix <- res_ch$miss_ix # or could just do which(is.na(flow))
+    
+    r2 <- numeric(nsave) 
+    for (s in seq_len(nsave)){
+      # fill missing data
+      flow_s <- flow
+      flow_s[miss_ix] <- res_ch$flow_miss[s,]
+      Z <- buildZ(flow_s, X) # reconstruct Z 
+      # calculate y_pred (n-length vector of predictions for all mice at iteration s)
+      mu <- as.numeric(X %*% res_ch$beta[s,] + Z %*% res_ch$delta[s,])
+      # residual variances  
+      if (resid_based){
+        var_res <- var(y - mu)
+      } else {
+        var_res <- res_ch$sigma2[s]
+      }
+      var_fit <- var(mu)
+      r2[s] <- var_fit / (var_fit + var_res)
+    }
+    r2_all[[ch]] <- r2
+  }
+  r2_draws <- unlist(r2_all, use.names = FALSE)
+  out <- list(r2 = r2_draws,
+              r2_by_chain = r2_all,
+              summary = c(median = median(r2_draws),
+                          mean = mean(r2_draws),
+                          sd = sd(r2_draws),
+                          q05 = quantile(r2_draws, 0.05),
+                          q95 = quantile(r2_draws, 0.95)))
+  return(out)
+}
 
 # --------------------------------CV functions-------------------------------- #
 # function for creating cell-wise folds over observed cells (i.e., exclude originally 
@@ -209,6 +247,22 @@ make_spd <- function(M, eps0 = 1e-12, max_eps = 1e-2) {
     eps <- if (eps == 0) eps0 else eps * 10
     if (eps > max_eps) stop("make_spd: could not make matrix SPD")
   }
+}
+
+# Helper: convert a parameter block into an array [iter x chain x K]
+to_arr <- function(res, name) {
+  block <- lapply(res, function(x) x[[name]])
+  
+  # Coerce each chain's block to a matrix [iter x K]
+  block <- lapply(block, function(v) {
+    if (is.null(dim(v))) matrix(v, ncol = 1) else v
+  })
+  
+  n_iter <- nrow(block[[1]])
+  n_ch   <- length(block)
+  K      <- ncol(block[[1]])
+  
+  array(unlist(block, use.names = FALSE), dim = c(n_iter, n_ch, K))
 }
 
 jaccard <- function(set1, set2) {
