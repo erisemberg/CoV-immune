@@ -88,18 +88,15 @@ Rscript trait_eda.R
 ```
 
 ## Variable selection 
-Perform variable selection (computationally intensive) and generate Figure 2:
+Perform variable selection and generate Figure 2. This is set up to run 5000 iterations of a Gibbs sampler, in addition to 5 repeats of 10-fold cross-validation, so is computationally intensive. 
 
 ```
 Rscript var_selection.R 
 ```
 
-EDA 
------------------------
+## QTL mapping  
 
-QTL mapping  
------------------------
 
-Mediation analysis  
------------------------
+## Mediation analysis  
+
 
