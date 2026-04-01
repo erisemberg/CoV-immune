@@ -114,5 +114,9 @@ Rscript summarizeQTL.R
 ```
 
 ## Mediation analysis  
+Run mediation analysis and create Figure 4:
 
+```
+Rscript mediation.R
+```
 
