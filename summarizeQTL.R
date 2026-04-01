@@ -6,7 +6,6 @@ library(extRemes)
 library(ggplotify)
 library(cowplot)
 library(grid)
-#library(stringr)
 source("/Users/ellenrisemberg/Documents/ValdarFerris/scripts/qtl_functions.R")
 setwd("/Users/ellenrisemberg/Documents/ValdarFerris/Coronavirus/cov-immune")
 

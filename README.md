@@ -66,10 +66,10 @@ Rscript imputation.R
 
 # Data analysis 
 
-Perform variance component analysis on a high-performance computing cluster using SLURM (requests 106 CPUs to run in parallel by trait):
+Perform variance component analysis on a high-performance computing cluster using SLURM (requests enough CPUs to run in parallel by trait):
 
 ```
-sbatch vc.sh
+sbatch var_comp.sh
 ```
 
 or locally (runs in parallel using available CPUs):
@@ -95,6 +95,17 @@ Rscript var_selection.R
 ```
 
 ## QTL mapping  
+Perform QTL mapping on a high-performance computing cluster using SLURM (requests enough CPUs to run in parallel by trait): 
+
+```
+sbatch map_qtl.sh
+```
+
+or locally (runs in parallel using available CPUs):
+
+```
+Rscript map_qtl.R
+```
 
 
 ## Mediation analysis  

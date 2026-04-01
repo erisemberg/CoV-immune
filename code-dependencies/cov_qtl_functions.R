@@ -503,6 +503,383 @@ calc_auc <- function(dat, steps, col.name, phenos, is_df = FALSE){
 
 #----------------------------Working with QTL objects--------------------------#
 #+++++++++++++++++++++++++++++++++++++++++++++++++++
+# This function does univariate modeling on non-missing target, for comparison
+# with SynSurr results 
+# Note that covariates are hard-coded
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
+univar_scan <- function(cross, target, covar, gxt = FALSE, wts = NULL, sw = FALSE){
+  # calculate genotype probabilities if necessary 
+  if (is.null(cross$geno[[1]]$prob)){  # calc.genoprob hasn't been run
+    cross <- calc.genoprob(cross)
+    message("Running calc.genoprob...")
+  }
+  # identify X chromosome 
+  geno_class <- sapply(cross$geno, class)
+  x_idx <- which(geno_class == "X")
+  autosome_idx <- which(geno_class == "A")
+  # calculate dosage if necessary
+  if (is.null(cross$geno[[1]]$dos)){ 
+    # calculate dosage of B allele (additive effect)
+    calc.dosage <- function(cross){
+      # autosomes only (construct explicit X design in marker loop)
+      for (c in autosome_idx){ 
+        prob <- cross$geno[[c]]$prob 
+        cross$geno[[c]]$dos <- prob[,,2] + 2*prob[,,3] # 0*P(AA) + 1*P(AB) + 2*P(BB)
+      }
+      return(cross)
+    }
+    cross <- calc.dosage(cross) 
+    message("Running calc.dosage...")
+  }
+  
+  p <- calc.num.markers(cross) # number of markers
+  
+  # pre-allocate vectors for results 
+  markers   <- vector(length = p)
+  chrs      <- vector(length = p)
+  positions <- vector(length = p)
+  lods      <- vector(length = p)
+  if (gxt){
+    lodsG   <- vector(length = p)
+    lodsGxT <- vector(length = p)
+  }
+  
+  # covariate dataframe
+  has_target <- !is.na(target)
+  lmdata <- as.data.frame(covar[has_target,]) 
+  lmdata$target <- target [has_target]
+  lmdata$add <- rep(NA, nrow(lmdata)) 
+  lmdata$dom <- rep(NA, nrow(lmdata)) 
+  if (is.null(wts)){ wts <- rep(1, nrow(lmdata)) }
+  
+  # null models and alt formulas for LM
+  if (gxt){ 
+    # H0 for overall and marginal G
+    form0A <- as.formula("target ~ sex + trt") 
+    form0X <- as.formula("target ~ sex + trt + pgm")
+    # H_alt for overall and GxT 
+    form1A <- as.formula("target ~ sex + trt + add + dom + add*trt + dom*trt")
+    form1X <- as.formula("target ~ sex + trt + pgm + ABf + BB + BY + ABf*trt + BB*trt + BY*trt")
+    # H0 for GxT / H_alt for G 
+    formGA <- as.formula("target ~ sex + trt + add + dom")
+    formGX <- as.formula("target ~ sex + trt + pgm + ABf + BB + BY")
+  } else { # gxt = FALSE
+    form0A <- as.formula("target ~ sex")
+    form0X <- as.formula("target ~ sex + pgm")
+    form1A <- as.formula("target ~ sex + add + dom")
+    form1X <- as.formula("target ~ sex + pgm + ABf + BB + BY")
+  }
+  
+  fitlm0A <- lm(form0A, data = lmdata, weights = wts)
+  fitlm0X <- lm(form0X, data = lmdata, weights = wts)
+  
+  # null models and alt formulas for LMM 
+  # fitlm0A <- lmer(as.formula("target ~ sex + (1|flow_batch)"), data = lmdata)
+  # fitlm0X <- lmer(as.formula("target ~ sex + pgm + (1|flow_batch)"), data = lmdata)
+  # form1A <- as.formula("target ~ sex + add + dom + (1|flow_batch)")
+  # form1X <- as.formula("target ~ sex + pgm + ABf + BB + BY + (1|flow_batch)")
+  
+  sexM <- (lmdata$sex == 1)
+  sexF <- (lmdata$sex == 0)
+  fwdF <- sexF & (lmdata$pgm == 0) # female, forward direction (pgm = 0)
+  revF <- sexF & (lmdata$pgm == 1) # female, reverse direction (pgm = 1)
+  
+  marker.pos <- 0
+  
+  for (c in 1:length(cross$geno)){
+    K <- ncol(cross$geno[[c]]$data)
+    dos <- cross$geno[[c]]$dos
+    prob <- cross$geno[[c]]$prob
+    
+    for (k in 1:K){
+      marker.pos <- marker.pos + 1
+      
+      if (c %in% autosome_idx){
+        lmdata$add <- dos[has_target,k] # dosage = additive effect 
+        lmdata$dom <- prob[has_target,k,2] # p(AB) = dominance effect
+        
+        fitlm0 <- fitlm0A
+        fitlm1 <- lm(form1A, data = lmdata, weights = wts)
+        
+        if (sw){ # use heteroscedasticity-robust sandwich estimator 
+          aov <- lmtest::waldtest(fitlm0, fitlm1, vcov = function(m) sandwich::vcovHC(m, type = "HC3"), test = "F")
+        } else { # use standard anova 
+          aov <- anova(fitlm0, fitlm1)
+        }
+        
+        if (gxt){ # test for significance of marginal G and GxT too 
+          fitlmG <- lm(formGA, data = lmdata, weights = wts)
+        }
+        
+        # LMM 
+        # fitlm1 <- lmer(form1A, data = lmdata)
+        # kr <- KRmodcomp(fitlm1, fitlm0)
+        
+      } else if (c %in% x_idx){
+        p1 <- prob[has_target,k,1] # females: p(AA) if pgm = 0; p(BB) if pgm = 1. males: p(AY)
+        p2 <- prob[has_target,k,2] # females: p(ABf) if pgm = 0; P(ABr) if pgm = 1. males p(BY)
+        
+        # baseline genotypes: AA (F forward), ABr (F reverse), AY (male)
+        # specify ABf, BB, and BY; baseline genos implicitly represented as reference levels 
+        pABf <- as.numeric(fwdF) * p2 
+        pBB <- as.numeric(revF) * p1
+        pBY <- as.numeric(sexM) * p2
+        Xcols <- cbind(pABf, pBB, pBY)
+        colnames(Xcols) <- c("ABf", "BB", "BY")
+        Xlmdata <- cbind(lmdata, as.data.frame(Xcols))
+        
+        fitlm0 <- fitlm0X
+        fitlm1 <- lm(form1X, data = Xlmdata, weights = wts)
+        
+        if (sw){ # use heteroscedasticity-robust sandwich estimator 
+          aov <- lmtest::waldtest(fitlm0, fitlm1, vcov = function(m) sandwich::vcovHC(m, type = "HC3"), test = "F")
+        } else { # use standard anova 
+          aov <- anova(fitlm0, fitlm1)
+        }
+        
+        if (gxt){ 
+          fitlmG <- lm(formGX, data = Xlmdata, weights = wts)
+        }
+        
+        # LMM
+        # fitlm1 <- lmer(form1X, data = Xlmdata)
+        # kr <- KRmodcomp(fitlm1, fitlm0)
+      }
+      
+      pval <- aov[2,'Pr(>F)']
+      
+      # LOD calculation 
+      # LL_null <- as.numeric(logLik(fitlm0))
+      # LL_full <- as.numeric(logLik(fitlm1))
+      # LOD_overall <- (LL_full - LL_null)/log(10)
+      # if (gxt){
+      #   LL_G <- as.numeric(logLik(fitlmG))
+      #   LOD_G <- (LL_G - LL_null)/log(10)
+      #   LOD_GxT <- (LL_full - LL_G)/log(10)
+      # }
+      # LMM
+      # pval <- kr$test["Ftest", "p.value"] 
+      
+      if (gxt){ # test for significance of marginal G and GxT too 
+        if (sw){ # use heteroscedasticity-robust sandwich estimator 
+          aovG <- lmtest::waldtest(fitlm0, fitlmG, vcov = function(m) sandwich::vcovHC(m, type = "HC3"), test = "F")
+          aovGxT <- lmtest::waldtest(fitlmG, fitlm1, vcov = function(m) sandwich::vcovHC(m, type = "HC3"), test = "F")
+        } else { # use standard anova 
+          aovG <- anova(fitlm0, fitlmG) # marginal G
+          aovGxT <- anova(fitlmG, fitlm1) # GxT
+        }
+      }
+      
+      marker.name           <- colnames(cross$geno[[c]]$data)[k]
+      markers[marker.pos]   <- marker.name
+      chrs[marker.pos]      <- names(cross$geno)[c]
+      positions[marker.pos] <- cross$geno[[c]]$map[marker.name]
+      #lods[marker.pos]      <- LOD_overall
+      lods[marker.pos]      <- -log10(pval)
+      
+      if (gxt){
+        #lodsG[marker.pos] <- LOD_G
+        lodsG[marker.pos] <- -log10(aovG[2,"Pr(>F)"])
+        #lodsGxT[marker.pos] <- LOD_GxT
+        lodsGxT[marker.pos] <- -log10(aovGxT[2,"Pr(>F)"])
+      }
+      
+    }
+  }
+  
+  # Create object 
+  if (gxt){
+    mod <- data.frame(chrs, positions, lods, lodsG, lodsGxT)
+    #names(mod) <- c("chr", "pos", "lod", "lodG", "lodGxT")
+    names(mod) <- c("chr", "pos", "p_overall", "p_G", "p_GxT")
+  } else {
+    mod <- data.frame(chrs, positions, lods)
+    # names(mod) <- c("chr", "pos", "lod") 
+    names(mod) <- c("chr", "pos", "pval") 
+  }
+  rownames(mod) <- markers
+  class(mod) <- c("scanone", "data.frame") # so we can use R/qtl functions (see Fig 5.4 in guide)
+  
+  return(mod)
+}
+
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
+# Univariate permutation tests 
+# Note that column names in covar dataframe are hard-coded
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
+univar_perm <- function(cross, target, covar, num_perms = 1000, gxt = FALSE, wts = NULL){
+  # calculate genotype probabilities if necessary 
+  if (is.null(cross$geno[[1]]$prob)){  # calc.genoprob hasn't been run
+    cross <- calc.genoprob(cross)
+    message("Running calc.genoprob...")
+  }
+  # identify X chromosome 
+  geno_class <- sapply(cross$geno, class)
+  x_idx <- which(geno_class == "X")
+  autosome_idx <- which(geno_class == "A")
+  # calculate dosage if necessary
+  if (is.null(cross$geno[[1]]$dos)){ 
+    # calculate dosage of B allele (additive effect)
+    calc.dosage <- function(cross){
+      # autosomes only (construct explicit X design in marker loop)
+      for (c in autosome_idx){ 
+        prob <- cross$geno[[c]]$prob 
+        cross$geno[[c]]$dos <- prob[,,2] + 2*prob[,,3] # 0*P(AA) + 1*P(AB) + 2*P(BB)
+      }
+      return(cross)
+    }
+    cross <- calc.dosage(cross)
+    message("Running calc.dosage...")
+  }
+  
+  p <- calc.num.markers(cross)
+  
+  target_og <- target
+  has_target <- !is.na(target)
+  target <- target[has_target]
+  n <- length(target)
+  
+  # create 1000 permutations of phenotype 
+  target_perms <- matrix(nrow = n, ncol = num_perms)
+  for (c in 1:num_perms){
+    target_perms[,c] <- target[sample(x = 1:n, size = n)]
+  }
+  
+  lmdata <- as.data.frame(covar[has_target,, drop = FALSE])
+  #lmdata <- as.data.frame(covar)
+  lmdata$target <- target
+  lmdata$add <- rep(NA, nrow(lmdata)) 
+  lmdata$dom <- rep(NA, nrow(lmdata)) 
+  if (is.null(wts)){ wts <- rep(1, nrow(lmdata)) }
+  
+  if (gxt){ # only do permutations on full vs null (e.g. G + GxT)
+    form0A <- as.formula("target ~ sex + trt")
+    form1A <- as.formula("target ~ sex + trt + add + dom + add*trt + dom*trt")
+    form0X <- as.formula("target ~ sex + trt + pgm")
+    form1X <- as.formula("target ~ sex + trt + pgm + ABf + BB + BY + ABf*trt + BB*trt + BY*trt")
+  } else { # gxt = FALSE
+    form0A <- as.formula("target ~ sex")
+    form1A <- as.formula("target ~ sex + add + dom")
+    form0X <- as.formula("target ~ sex + pgm")
+    form1X <- as.formula("target ~ sex + pgm + ABf + BB + BY")
+  }
+  
+  sexM <- (lmdata$sex == 1)
+  sexF <- (lmdata$sex == 0)
+  fwdF <- sexF & (lmdata$pgm == 0) # female, forward direction (pgm = 0)
+  revF <- sexF & (lmdata$pgm == 1) # female, reverse direction (pgm = 1)
+  
+  # create empty matrix for storing results 
+  #perm_lods <- matrix(nrow = num_perms, ncol = p)
+  perm_logPs <- matrix(nrow = num_perms, ncol = p)
+  
+  marker.pos = 0
+  
+  for (c in 1:length(cross$geno)){ 
+    K <- ncol(cross$geno[[c]]$data)
+    dos <- cross$geno[[c]]$dos
+    prob <- cross$geno[[c]]$prob
+    
+    for (k in 1:K){ 
+      marker.pos <- marker.pos + 1
+      
+      if (c %in% autosome_idx){
+        lmdata$add <- dos[has_target, k] # dosage = additive effect 
+        lmdata$dom <- prob[has_target, k, 2] # p(AB) = dominance effect
+        #lmdata$add <- dos[,k] # dosage = additive effect 
+        #lmdata$dom <- prob[,k,2] # p(AB) = dominance effect
+        
+        res <- lm.multiresponse(formula = form1A, 
+                                response.matrix = target_perms, 
+                                data = lmdata, 
+                                null.formula = form0A, 
+                                weights = wts,
+                                logP = TRUE) # change to logP = TRUE if using -logP 
+        
+      } else if (c %in% x_idx){
+        p1 <- prob[has_target, k, 1] # females: p(AA) if pgm = 0; p(BB) if pgm = 1. males: p(AY)
+        p2 <- prob[has_target, k, 2] # females: p(ABf) if pgm = 0; P(ABr) if pgm = 1. males p(BY)
+        
+        # baseline genotypes: AA (F forward), ABr (F reverse), AY (male)
+        # specify ABf, BB, and BY; baseline genos implicitly represented as reference levels 
+        pABf <- as.numeric(fwdF) * p2 
+        pBB <- as.numeric(revF) * p1
+        pBY <- as.numeric(sexM) * p2
+        Xcols <- cbind(pABf, pBB, pBY)
+        colnames(Xcols) <- c("ABf", "BB", "BY")
+        Xlmdata <- cbind(lmdata, as.data.frame(Xcols))
+        
+        res <- lm.multiresponse(formula = form1X, 
+                                response.matrix = target_perms, 
+                                data = Xlmdata, 
+                                null.formula = form0X, 
+                                weights = wts, 
+                                logP = TRUE) # change to logP = TRUE if using -logP 
+      }
+      
+      perm_logPs[,marker.pos] <- res$logP
+      #perm_lods[,marker.pos] <- res$LOD
+    }
+  }
+  
+  # find highest LOD from each genome scan and create distribution 
+  max_logPs <- apply(perm_logPs, 1, max)
+  #max_lods <- apply(perm_lods, 1, max)
+  
+  # fit GEV distribution 
+  #fitgev <- fevd(max_lods, type = "GEV")
+  fitgev <- fevd(max_logPs, type = "GEV")
+  fitgev <- add_attribute(fitgev, "class", c("permgev", "fevd"))
+  return(fitgev)
+}
+
+# Final row weights function (precision weights): w_i = 1 / δ_g(i)^2
+make_row_weights <- function(covar, var_by_group, mask_rows) {
+  g <- as.character(covar$trt[mask_rows])
+  w <- 1 / var_by_group[g]
+  return(w)
+}
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
+# local version of univar_perm. Doesn't use Will's lm.multiresponse function,
+# just runs 1000 sequential scans. Using this bc Will's function requires constant
+# design matrix. Assumes gxt = TRUE, default for wts = NULL and sw = FALSE. 
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
+univar_perm_gxt <- function(cross, target, covar, num_perms = 1000, var_by_group){
+  n <- length(target) 
+  max_logPs <- rep(NA, num_perms)
+  
+  for (i in 1:num_perms){
+    samp <- sample(x = 1:n, size = n)
+    # define weights
+    covar_i <- covar[samp,]
+    y_i <- target[samp]
+    has_y <- !is.na(y_i)
+    wts <- make_row_weights(covar_i, var_by_group, has_y)
+    
+    res <- try(univar_scan(cross, target = y_i, covar = covar_i, gxt = TRUE, wts = wts), silent = TRUE)
+    if (inherits(res, "try-error")) { message("Skipping permutation ", i); next }
+    
+    # get max log P per marker (between p_overall, p_G, and p_GxT)
+    max_logPs_permarker <- apply(res[,3:5], 1, max, na.rm = TRUE)
+    # max of max log Ps
+    max_logPs[i] <- max(max_logPs_permarker, na.rm = TRUE) 
+  }
+  
+  max_logPs <- max_logPs[!is.na(max_logPs)] # remove NAs
+  # fit GEV distribution 
+  fitgev <- fevd(max_logPs, type = "GEV")
+  fitgev <- add_attribute(fitgev, "class", c("permgev", "fevd"))
+  return(fitgev)
+}
+
+
+
+
+
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
 # create_models: this function creates all single-QTL models specified in the 
 #                models table
 # Input:

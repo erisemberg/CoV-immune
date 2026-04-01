@@ -10,9 +10,9 @@ library(doParallel)
 library(foreach)
 source("code-dependencies/cmdline.R")
 
-# ---------------------------------Load data---------------------------------- #
 run_mode <- cmdline.option("mode", default = "local", allowed.values = c("local", "slurm"))
 
+# ---------------------------------Load data---------------------------------- #
 # raw data
 cross <- read.cross(format = "csv", 
                     file = "derived_data/RqtlCC006xCC044_ctrlAndSARS.csv",
