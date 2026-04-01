@@ -107,6 +107,11 @@ or locally (runs in parallel using available CPUs):
 Rscript map_qtl.R
 ```
 
+Summarize QTL mapping results and create Figure 3:
+
+```
+Rscript summarizeQTL.R
+```
 
 ## Mediation analysis  
 
