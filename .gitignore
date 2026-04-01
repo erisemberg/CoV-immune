@@ -7,6 +7,16 @@
 # files being processed 
 /to_delete_or_process/
 
+# unnecessary bmediatR code / vignettes 
+/code-dependencies/bmediatR-master/.Rbuildignore
+/code-dependencies/bmediatR-master/.gitignore 
+/code-dependencies/bmediatR-master/DESCRIPTION
+/code-dependencies/bmediatR-master/NAMESPACE
+/code-dependencies/bmediatR-master/README.md
+/code-dependencies/bmediatR-master/data
+/code-dependencies/bmediatR-master/man
+/code-dependencies/bmediatR-master/vignettes 
+
 # irrelevant files 
 .DS_Store
 
