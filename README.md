@@ -1,6 +1,6 @@
 # CoV-immune
 
-NOTE 3/20/26: this repo is in progress
+NOTE 4/1/26: this repo is in progress. All code and data to generate results are present, but container / workflow testing is ongoing. 
 
 Environment prep
 -----------------------
