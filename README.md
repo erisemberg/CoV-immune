@@ -66,7 +66,7 @@ Rscript imputation.R
 
 # Data analysis 
 
-Perform variance component analysis on a high-performance computing cluster using SLURM (requests enough CPUs to run in parallel by trait):
+Perform variance component analysis on a high-performance computing (HPC) cluster using SLURM (requests enough CPUs to run in parallel by trait):
 
 ```
 sbatch var_comp.sh
@@ -77,6 +77,8 @@ or locally (runs in parallel using available CPUs):
 ```
 Rscript var_comp.R
 ```
+
+Note that variance component analysis is computationally intensive, with each trait taking over an hour. It will be much faster to perform on an HPC cluster than locally. UNC's HPC cluster does not allow Docker containers - if this is the case for your cluster, you can either 1) FTP the repo to the cluster, ensure the necessary packages are installed, and run the script; or 2) create an Apptainer (fka Singularity) container from the Docker container (we do not provide any guidance on performing this analysis with Apptainer). 
 
 Perform miscellaneous analyses/visualizations on trait data. 
 * Levene's test for variance heterogeneity 
