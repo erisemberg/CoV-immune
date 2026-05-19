@@ -8,4 +8,4 @@
 
 module load r/4.4.0
 
-Rscript var_comp.R --args --mode=SLURM
+Rscript var_comp.R --args --mode=slurm

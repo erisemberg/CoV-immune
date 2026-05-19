@@ -80,16 +80,18 @@ cross_data$Titer[cross_data$infection == "PBS"] <- 0
 med_fname <- "results/mediation/med_gxt_all.csv"
 if(file.exists(med_fname)){
   message(paste("Mediation results already exist in", med_fname))
-  med_gxt_all <- read_csv("results/mediation/med_gxt_all.csv")
+  med_gxt_all <- read_csv(med_fname)
 } else {
   # -------------------------mediation on immune QTL-------------------------- #
   message("Running mediation analysis on immune QTL...")
+  
   med_gxt_all <- data.frame(
     chr = character(), marker = character(), 
     immune_pheno = character(), disease_pheno = character(), analysis = character(),
     BFmed_any = numeric(), BFmed_grp1 = numeric(), BFmed_grp2 = numeric(), BFmed_grp3 = numeric(),
     BFcomp_any = numeric(), BFcomp_grp1 = numeric(), BFcomp_grp2 = numeric(), BFcomp_grp3 = numeric(),
     BFpart_any = numeric(), BFpart_grp1 = numeric(), BFpart_grp2 = numeric(), BFpart_grp3 = numeric())
+  
   ix = 0
   for (i in 1:nrow(condensed_qtl)){ # for all immune QTL
     chr <- condensed_qtl$chr[i]
@@ -184,7 +186,7 @@ if(file.exists(med_fname)){
                             ifelse(analysis == "3group", BFmed[1,"partial_grp3"], NA))
       
       # save posterior bar plot to png 
-      save_fname <- paste0("figures/med_wTiterCov/", immune_pheno, "_", disease_pheno, "_chr", chr, ".png")
+      save_fname <- paste0("figures/mediation/GxT/", immune_pheno, "_", disease_pheno, "_chr", chr, ".png")
       png(save_fname, width = 450, height = 300)
       if (analysis == "2group"){
         print(plot_posterior_bar_gxt(med_gxt, mediator_id = immune_pheno, grp_name = "Infection",
@@ -217,7 +219,7 @@ if(file.exists(med_fname)){
                        d0 = cross_data$d0)
       df <- na.omit(df) 
       
-      # only test for mediation if X-M association is significant? ### try without titer
+      # only test for mediation if X-M association is significant? 
       XMp <- summary(lm(M ~ infection + Titer + sex + X, data = df))$coefficients["X","Pr(>|t|)"]
       if (XMp > 0.05){ next }
       ix = ix + 1
@@ -296,7 +298,7 @@ if(file.exists(med_fname)){
                             ifelse(analysis == "3group", BFmed[1,"partial_grp3"], NA))
       
       # save posterior bar plot to png 
-      save_fname <- paste0("figures/med_wTiterCov/", cond_dis_qtl$qtl_id[i], "_", immune_pheno, "_", disease_pheno, ".png")
+      save_fname <- paste0("figures/mediation/GxT/", cond_dis_qtl$qtl_id[i], "_", immune_pheno, "_", disease_pheno, ".png")
       png(save_fname, width = 450, height = 300)
       if (analysis == "2group"){
         print(plot_posterior_bar_gxt(med_gxt, mediator_id = immune_pheno, grp_name = "Infection",

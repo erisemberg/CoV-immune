@@ -20,6 +20,8 @@ RUN R -e "install.packages('AGHmatrix')"
 RUN R -e "devtools::install_github('variani/lme4qtl')"
 RUN R -e "install.packages('doParallel')"
 RUN R -e "install.packages('mvtnorm')"
+RUN R -e "install.packages('foreach')"
+RUN R -e "install.packages('r2glmm')"
 
 # packages for lymphoid-integration.R, rqtl_file_prep.R, and data_processing.R included
 # ADD qtl_functions.R PACKAGES	
