@@ -17,6 +17,7 @@ library(r2glmm)
 library(parallel)
 library(doParallel)
 library(foreach)
+library(MLmetrics)
 source("code-dependencies/cov_qtl_functions.R")
 
 # ---------------------------------Load data---------------------------------- #

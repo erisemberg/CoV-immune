@@ -12,6 +12,12 @@ source("code-dependencies/cmdline.R")
 
 run_mode <- cmdline.option("mode", default = "local", allowed.values = c("local", "slurm"))
 
+ensure_directory <- function(directory){
+  if(!dir.exists(directory)){
+    dir.create(directory);
+  }
+}
+
 # ---------------------------------Load data---------------------------------- #
 # raw data
 cross <- read.cross(format = "csv", 
@@ -55,7 +61,7 @@ if (run_mode == "slurm"){
 doParallel::registerDoParallel(cl)
 
 message(paste("estimating variance components for immune phenotypes in parallel using", ncores, "cores."))
-varcomp_res <- foreach(i = 1:p, .combine = rbind, .packages = c("lme4qtl", "r2glmm")) %dopar% {
+varcomp_res <- foreach(i = 1:p, .packages = c("lme4qtl", "r2glmm")) %dopar% {
   pheno_name <- all_phenos[i]
   batch_term <- if (pheno_name == "Titer") "batch" else "flow_batch"
   
@@ -111,34 +117,39 @@ varcomp_res <- foreach(i = 1:p, .combine = rbind, .packages = c("lme4qtl", "r2gl
   # use Nakagawa and Schielzeth method to estimate variance explained by fixed effects
   fixed_r2 <- as.data.frame(r2beta(mod, method = "nsj"))
   
-  sex_vp_data <- fixed_r2[fixed_r2$Effect == "sex", c("Rsq", "lower.CL", "upper.CL")]
-  inf_vp_data <- fixed_r2[fixed_r2$Effect == "infection", c("Rsq", "lower.CL", "upper.CL")]
-  int_vp_data <- fixed_r2[fixed_r2$Effect == "sex:infection", c("Rsq", "lower.CL", "upper.CL")]
+  sex_vp_data <- unlist(fixed_r2[fixed_r2$Effect == "sex", c("Rsq", "lower.CL", "upper.CL")])
+  inf_vp_data <- unlist(fixed_r2[fixed_r2$Effect == "infection", c("Rsq", "lower.CL", "upper.CL")])
+  int_vp_data <- unlist(fixed_r2[fixed_r2$Effect == "sex:infection", c("Rsq", "lower.CL", "upper.CL")])
   
-  return(result = c(pheno_name, sex_vp_data, inf_vp_data, int_vp_data, h2_data, batch_vp_data),
-         log = log_msg)
+  return(list(result = c(pheno = pheno_name, 
+                         sex_vp = sex_vp_data[1], 
+                         sex_vp_lwr = sex_vp_data[2], 
+                         sex_vp_upr = sex_vp_data[3], 
+                         inf_vp = inf_vp_data[1], 
+                         inf_vp_lwr = inf_vp_data[2], 
+                         inf_vp_upr = inf_vp_data[3], 
+                         int_vp = int_vp_data[1], 
+                         int_vp_lwr = int_vp_data[2], 
+                         int_vp_upr = int_vp_data[3], 
+                         h2 = h2_data[1], 
+                         h2_lwr = h2_data[2], 
+                         h2_upr = h2_data[3], 
+                         batch_vp = batch_vp_data[1],
+                         batch_vp_lwr = batch_vp_data[2],
+                         batch_vp_upr = batch_vp_data[3]),
+              log = log_msg))
 }
 
 stopCluster(cl)
 
 # print worker log messages 
 logs <- vapply(varcomp_res, `[[`, character(1), "log")
-logs <- logs[!is.na(logs) & logs != ""]
 cat(paste0(logs, collapse = "\n"), "\n")
 
 # extract results
-varcomp_data <- do.call(
-  rbind,
-  lapply(varcomp_res, `[[`, "result")
-)
+varcomp_data <- do.call(rbind, lapply(varcomp_res, `[[`, "result"))
 
-colnames(varcomp_data) <- c("pheno", 
-                            "sex_vp", "sex_vp_lwr", "sex_vp_upr",
-                            "inf_vp", "inf_vp_lwr", "inf_vp_upr",
-                            "int_vp", "int_vp_lwr", "int_vp_upr",
-                            "h2", "h2_lwr", "h2_upr",
-                            "batch_vp", "batch_vp_lwr", "batch_vp_upr")
-
+ensure_directory("results")
 write_csv(as.data.frame(varcomp_data), file = "results/var_comp_res.csv")
 
 

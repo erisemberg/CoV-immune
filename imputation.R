@@ -72,8 +72,8 @@ S0 <- diag(q) * (nu0 - q - 1)
 M0 <- matrix(0, p, q) # initialize beta_imp and set B0 (prior mean) - ((p-1) x q) matrix 
 Lambda0 <- diag(p)*n # large variance / tune as desired ### try diag(1,k)
 
-S <- 100 
-burn_in <- 10 
+S <- 1000
+burn_in <- 100 
 seed = 123
 
 ncores <- min(4L, parallel::detectCores(logical = FALSE)) # 4 if available
