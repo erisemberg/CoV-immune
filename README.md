@@ -80,12 +80,13 @@ Rscript var_comp.R
 
 Results are stored in `results/var_comp_res.csv`. 
 
-*Note that variance component analysis is computationally intensive, with each trait potentially taking 1-3 hours, depending on if bootstrapping is necessary. It will be much faster to perform on an HPC cluster than locally so that analysis for all traits can be run completely in parallel. UNC's HPC cluster does not allow Docker containers - if this is the case for your cluster, you can either 1) FTP the repo to the cluster, manually ensure the necessary packages are installed, run the script, and FTP back the resulting file; or 2) create an Apptainer (fka Singularity) container from the Docker container (we do not provide any guidance on performing this analysis with Apptainer).*
+*Note that variance component analysis is computationally intensive, with each trait potentially taking 1-3 hours, depending on if bootstrapping is necessary. It will be much faster to perform on an HPC cluster than locally so that analysis for all traits can be run completely in parallel. UNC's HPC cluster does not allow Docker containers - if this is the case for your cluster, you can either 1) FTP the repo to the cluster, manually ensure the necessary packages are installed, run the script, and FTP back the results file; or 2) create an Apptainer (fka Singularity) container from the Docker container (we do not provide any guidance on performing this analysis with Apptainer).*
 
 Perform miscellaneous analyses/visualizations on trait data. 
-* Levene's test for variance heterogeneity 
-* Classification of infection group by immune trait data with `glmnet` and random forest 
-* Create Figure 1 and Supp. Figure 1 
+* Levene's test for variance heterogeneity (results printed to `results/eda.txt`)
+* Classification of infection group by immune trait data with `glmnet` and random forest (results printed to `results/eda.txt`) 
+* Frequentist variable importance analysis with `glmnet` (saved to `results/var_selection/frequentist/glmnet_var_importance.csv`)
+* Create Figure 1 and Supp. Figure 1 (saved to `figures/Figure1.png` and `figures/supplemental/SuppFig1.png`)
 
 ```
 Rscript trait_eda.R

@@ -20,6 +20,9 @@ library(foreach)
 library(MLmetrics)
 source("code-dependencies/cov_qtl_functions.R")
 
+ensure_directory("results")
+logger <- make_logger("results/eda.txt")
+
 # ---------------------------------Load data---------------------------------- #
 # raw data
 cross <- read.cross(format = "csv", 
@@ -54,16 +57,24 @@ grouplabels = list("PBS" = "Control", "SARSCoV" = "SARS-CoV", "SARS2CoV" = "SARS
 # ------------------------------------EDA------------------------------------- #
 # ---------------------------------------------------------------------------- #
 # sample sizes 
-message(paste(sum(!is.na(cross_data$weight_aac)), "total mice"))
-table(cross_data$infection[!is.na(cross_data$weight_aac)])
+logger("%s total mice", sum(!is.na(cross_data$weight_aac)))
+logger(table(cross_data$infection[!is.na(cross_data$weight_aac)]))
 
+logger("Titer range: %s", paste(round(range(cross_data$Titer, na.rm = TRUE), 2), collapse = " to "))
 # does titer vary by infection group? 
-message(paste("Titer range:", paste(round(range(cross_data$Titer, na.rm = TRUE), 2), collapse = " to ")))
-t.test(Titer ~ infection, cross_data, var.equal = FALSE)
+t_res <- t.test(Titer ~ infection, cross_data, var.equal = FALSE)
+logger("t-test for titer ~ infection: p = %.2e", t_res$p.value)
 
 # does titer predict weight loss? only considers infected mice (don't have titer data for ctrl mice)
 summary(lm(weight_aac ~ infection + sex + Titer + infection:sex, cross_data))
+logger("Titer effect on weight loss estimated at %.2f (p = %.2e)", 
+       coef(summary(lm(weight_aac ~ infection + sex + Titer + infection:sex, cross_data)))["Titer", "Estimate"],
+       coef(summary(lm(weight_aac ~ infection + sex + Titer + infection:sex, cross_data)))["Titer", "Pr(>|t|)"])
+# does titer predict HS?
 summary(lm(HS ~ infection + sex + Titer + infection:sex, cross_data))
+logger("Titer effect on lung CS estimated at %.2f (p = %.2e)", 
+       coef(summary(lm(HS ~ infection + sex + Titer + infection:sex, cross_data)))["Titer", "Estimate"],
+       coef(summary(lm(HS ~ infection + sex + Titer + infection:sex, cross_data)))["Titer", "Pr(>|t|)"])
 
 # ----------------------------variance heterogeneity-------------------------- #
 VHdf <- data.frame(phenotype = character(),
@@ -83,9 +94,9 @@ for (i in 1:q){
     inf_var_g <- inf_var_g + 1
   }
 }
-message(paste("variance heterogeneity is present for", sum(VHdf$infectionVH < 0.05) , "phenotypes."))
-message(paste("variance is greater in infected mice for", inf_var_g, "phenotypes."))
 
+logger("Variance heterogeneity is present for %s phenotypes", sum(VHdf$infectionVH < 0.05))
+logger("Variance is greater in infected mice (vs. control mice) for %s phenotypes.", inf_var_g)
 
 # -------------------------classification with glmnet------------------------- #
 # split into train/test
@@ -112,8 +123,13 @@ ctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 5, classProbs
 tune_grid <- expand.grid(alpha = seq(0, 1, by = 0.1), lambda = seq(0.0001, 1, length = 10))
 glmnet_cv <- train(infection ~ ., data = flow_wInf, method = "glmnet", trControl = ctrl, tuneGrid = tune_grid)
 best <- glmnet_cv$bestTune
-glmnet_cv$results[glmnet_cv$results$alpha == best$alpha & glmnet_cv$results$lambda == best$lambda,
+logger("Best performing classifier:")
+logger(best)
+
+best_acc <- glmnet_cv$results[glmnet_cv$results$alpha == best$alpha & glmnet_cv$results$lambda == best$lambda,
                   c("Accuracy", "Kappa", "AccuracySD", "KappaSD")]
+logger(best_acc)
+# variable importance 
 var_imp <- varImp(glmnet_cv, scale = FALSE)
 imp_df <- var_imp$importance
 imp_df$overall <- rowSums(imp_df)
@@ -125,11 +141,12 @@ ensure_directory("results/var_selection")
 ensure_directory("results/var_selection/frequentist")
 write_csv(imp_df, "results/var_selection/frequentist/glmnet_var_importance.csv")
 
-
 # ---------------------classification with random forest---------------------- #
 rf_model <- randomForest(as.factor(infection) ~ ., data = train_data, ntree = 500, importance = TRUE)
 rf_pred <- predict(rf_model, newdata = test_data)
-#confusionMatrix(rf_pred, as.factor(test_data$infection))
+rf_cm <- confusionMatrix(as.factor(rf_pred), as.factor(test_data$infection))
+logger("Random forest classifier performance:")
+logger(rf_cm$overall[c("Accuracy", "Kappa", "AccuracyLower", "AccuracyUpper")])
 #varImpPlot(rf_model)
 
 ### PREDICTION W RANDOM FOREST 
@@ -184,7 +201,7 @@ Tplot <- ggplot(df_plot, aes(x = infection, y = mean_prop, fill = state)) +
   scale_y_continuous(limits = c(0, 1), labels = scales::percent, expand = c(0, 0)) +
   labs(x = NULL, y = "Normalized proportion", fill = "Differentiation state") +
   theme_minimal()
-ggsave("figures/supplemental/Tcell_composition.png")
+ggsave("figures/supplemental/Tcell_composition.png", bg = "white")
 
 # ---------------------------------------------------------------------------- #
 # ---------------------------------Supp Fig 1--------------------------------- #

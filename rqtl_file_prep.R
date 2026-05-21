@@ -27,7 +27,7 @@ source("code-dependencies/cov_qtl_functions.R")
 
 ensure_directory("derived_data")
 ensure_directory("derived_data/data_processing")
-log <- make_logger("derived_data/data_processing/file_processing_notes.md")
+logger <- make_logger("derived_data/data_processing/file_processing_notes.md")
 
 #---------------------------------Parameters-----------------------------------#
 geno_file <- "source_data/Cr_RB05_miniMUGA-013024_paddedIDs.csv"
@@ -52,15 +52,15 @@ B.ref = "Cr_RB05_CC044.UncB6._F_2397" # parent mouse representing B genotype
 #-------------------------------Genotype data----------------------------------#
 #------------------------------------------------------------------------------#
 geno <- read.csv(geno_file)
-log(paste("Genotype data loaded from ", geno_file, ".", sep = ""))
+logger(paste("Genotype data loaded from ", geno_file, ".", sep = ""))
 
 F2_start = ncol(geno)-num_F2s+1 # column index of first F2 mouse column
 F2_end = ncol(geno) # column index of last F2 mouse column 
-log(paste("Columns ", F2_start, " to ", F2_end, " are F2 mice."))
+logger(paste("Columns ", F2_start, " to ", F2_end, " are F2 mice."))
 
-log(paste("Starting with ", nrow(geno), " markers.", sep=""))
+logger(paste("Starting with ", nrow(geno), " markers.", sep=""))
 geno <- geno[geno$Chromosome != 0, ] # Remove chr0 rows
-log(paste("After removing chr0 markers: ", nrow(geno), sep=""))
+logger(paste("After removing chr0 markers: ", nrow(geno), sep=""))
 
 geno$Position_b38 <- geno$Position_b38/1e6 # convert bp position to cM
 
@@ -81,21 +81,21 @@ geno.Y.MT <- geno[which((geno$Chromosome == "Y") | geno$Chromosome == "MT"), ]
 ### Filter Y chromosome markers - all females should have N calls for each Y marker
 #geno.Y.MT <- geno[which((geno$Chromosome == "Y") & (geno$pct_N == 0))]
 geno <- geno[which((geno$Chromosome != "Y") & (geno$Chromosome != "MT")),]
-log(paste("After removing Y/MT markers: ", nrow(geno), sep=""))
+logger(paste("After removing Y/MT markers: ", nrow(geno), sep=""))
 
 # Filter out markers with failure rate > 5% N  
 geno <- geno[which(geno$pct_N <= 0.05),]
-log(paste("After removing markers with > 5 %% rate of N calls: ", nrow(geno), sep=""))
+logger(paste("After removing markers with > 5 %% rate of N calls: ", nrow(geno), sep=""))
 
 # Filter out bad and uninformative markers
 # Anything with almost all ref or alt is uninformative - remove markers where ref/alt is > 95% 
 geno <- geno[which((geno$num_alt/num_F2s) <= 0.95),] 
-log(paste("After removing markers with > 95 %% alt calls: ", nrow(geno), sep=""))
+logger(paste("After removing markers with > 95 %% alt calls: ", nrow(geno), sep=""))
 geno <- geno[which((geno$num_ref/num_F2s) <= 0.95),] 
-log(paste("After removing markers with > 95 %% ref calls: ", nrow(geno), sep=""))
+logger(paste("After removing markers with > 95 %% ref calls: ", nrow(geno), sep=""))
 # Remove markers with almost all het calls (or all H/N calls)
 geno <- geno[which(geno$het_all != 1),] 
-log(paste("After removing markers with all het calls: ", nrow(geno), sep=""))
+logger(paste("After removing markers with all het calls: ", nrow(geno), sep=""))
 
 # Plot x = ref/(ref+alt) and y = het/(ref+alt+het)
 png("derived_data/data_processing/marker_qc_plot.png")
@@ -114,9 +114,9 @@ if (crosstype == "f2"){
   geno <- geno[which((geno$ref_alt == 0) | (geno$ref_alt == 1)),] # Need hard cutoff to satisfy R/qtl 
 }
 
-log(paste("After filtering for informative ", ifelse(crosstype=="bc", "backcross", "F2"), " markers: ", nrow(geno), sep=""))
+logger(paste("After filtering for informative ", ifelse(crosstype=="bc", "backcross", "F2"), " markers: ", nrow(geno), sep=""))
 
-log("Marker filtering complete.")
+logger("Marker filtering complete.")
 
 #---------------------------------Recoding-------------------------------------#
 recoded.genos <- matrix(NA, nrow=dim(geno[,F2_start:F2_end])[1], 
@@ -130,7 +130,7 @@ geno[,F2_start:F2_end] <- recoded.genos
 
 geno[geno=="N"] <- "-" # Replace all "N" with "-"
 
-log("Genotype data recoded from A/T/C/G/H to AA/AB/BB.")
+logger("Genotype data recoded from A/T/C/G/H to AA/AB/BB.")
 
 #------------------------------Prep for R/qtl----------------------------------#
 # Remove marker stats
@@ -150,7 +150,7 @@ rqtl <- rownames_to_column(rqtl, var="mouse_ID") %>% as_tibble
 #-------------------------------Phenotype data---------------------------------#
 #------------------------------------------------------------------------------#
 pheno <- read_xlsx(pheno_file)
-log(paste("Phenotype data loaded from ", pheno_file, ".", sep=""))
+logger(paste("Phenotype data loaded from ", pheno_file, ".", sep=""))
 
 # Convert pheno$Geno_ID and geno$mouse_ID to uppercase for matching
 pheno$Geno_ID <- toupper(pheno$Geno_ID) 
@@ -178,7 +178,7 @@ for (k in 1:length(pheno.names)){
   col.pos = col.pos+1
 }
 
-log("Genotype and phenotype data integrated.")
+logger("Genotype and phenotype data integrated.")
 #------------------------------------------------------------------------------#
 #--------------------------------Output data-----------------------------------#
 #------------------------------------------------------------------------------#
@@ -187,4 +187,4 @@ rqtl[1:2,"mouse_ID"] <- "" # Remove chr/pos row labels
 write.csv(rqtl, out_file, row.names=F)
 write.csv(geno.Y.MT, Y_MT_out_file)
 
-log(paste("Output to csv file: ", out_file, ".", sep=""))
+logger(paste("Output to csv file: ", out_file, ".", sep=""))

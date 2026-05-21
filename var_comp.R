@@ -117,9 +117,9 @@ varcomp_res <- foreach(i = 1:p, .packages = c("lme4qtl", "r2glmm")) %dopar% {
   # use Nakagawa and Schielzeth method to estimate variance explained by fixed effects
   fixed_r2 <- as.data.frame(r2beta(mod, method = "nsj"))
   
-  sex_vp_data <- unlist(fixed_r2[fixed_r2$Effect == "sex", c("Rsq", "lower.CL", "upper.CL")])
-  inf_vp_data <- unlist(fixed_r2[fixed_r2$Effect == "infection", c("Rsq", "lower.CL", "upper.CL")])
-  int_vp_data <- unlist(fixed_r2[fixed_r2$Effect == "sex:infection", c("Rsq", "lower.CL", "upper.CL")])
+  sex_vp_data <- as.numeric(fixed_r2[fixed_r2$Effect == "sex", c("Rsq", "lower.CL", "upper.CL")])
+  inf_vp_data <- as.numeric(fixed_r2[fixed_r2$Effect == "infection", c("Rsq", "lower.CL", "upper.CL")])
+  int_vp_data <- as.numeric(fixed_r2[fixed_r2$Effect == "sex:infection", c("Rsq", "lower.CL", "upper.CL")])
   
   return(list(result = c(pheno = pheno_name, 
                          sex_vp = sex_vp_data[1], 
