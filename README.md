@@ -35,7 +35,7 @@ Rscript lymphoid_integration.R
 
 This script integrates the three datasets in `source_data/lymphoid-combined.xlsx` into one dataset, stored in `derived_data/lymphoid-harmonization-3.csv`. At the moment, this data is integrated with the other immune and phenotype data manually in Excel, resulting in `source_data/F2_phenos_lymph3.xlsx`.
 
-Prepare Rqtl file: 
+Prepare the Rqtl file: 
 
 ```
 Rscript rqtl_file_prep.R
@@ -49,7 +49,11 @@ Prepare dataset with transformed and centered/scaled phenotypes (`derived_data/c
 Rscript data_processing.R
 ```
 
-Produce a version of the dataset with missing immune trait data imputed:  
+Produce a version of the dataset with missing immune trait data imputed (`derived_data/cross_data_flow_imp.csv`):  
+
+```
+Rscript imputation.R
+```
 
 <!--
 Set `--compareCV=TRUE` to run cross-validation (CV) on the following imputation models:
@@ -61,12 +65,6 @@ Set `--compareCV=TRUE` to run cross-validation (CV) on the following imputation 
 
 Set `--runCV=TRUE` to run cross-validation on only the chosen imputation method, method (2).
 -->
-
-```
-Rscript imputation.R
-```
-
-This imputed dataset will be stored in `derived_data/cross_data_flow_imp.csv`.
 
 # Data analysis 
 
