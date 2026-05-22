@@ -1,42 +1,65 @@
-library(readr)
+library(tidyverse)
 library(readxl)
+library(writexl)
 library(mvtnorm)
 library(doParallel)
 library(foreach)
 library(coda)
-library(nimble)
-library(statmod)
-library(AGHmatrix)
-library(missRanger)
-library(qtl)
-library(MASS)
+library(posterior)
+#library(nimble)
+#library(statmod)
+#library(AGHmatrix)
+#library(missRanger)
+#library(qtl)
+#library(MASS)
 library(heatmaply)
 library(ComplexHeatmap)
-library(ggrepel)
-library(corrplot)
+#library(ggrepel)
+#library(corrplot)
 library(cowplot)
 library(factoextra)
 library(patchwork)
-library(loo)
+library(RColorBrewer)
+library(scales)
+#library(loo)
 library(matrixStats)
 library(ggridges)
 #source("code-dependencies/cov_qtl_functions.R")
 source("code-dependencies/gibbs_functions.R")
 
+Sys.setenv(OMP_NUM_THREADS = "1",
+           OPENBLAS_NUM_THREADS = "1",
+           MKL_NUM_THREADS = "1",
+           BLIS_NUM_THREADS = "1",
+           VECLIB_MAXIMUM_THREADS = "1",
+           NUMEXPR_NUM_THREADS = "1")
+
+run_mcmc_diag <- FALSE
+  
+ensure_directory("results")
+ensure_directory("results/var_selection")
+logger <- make_logger("results/var_selection/bayesian_log.txt")
+
 # ---------------------------------Load data---------------------------------- #
-cross_data <- read_csv("derived_data/cross_data.csv", show_col_types = FALSE)
+cross_data_fname <- "derived_data/cross_data.csv"
+cross_data <- read_csv(cross_data_fname, show_col_types = FALSE)
+logger("Loaded cross data from %s.", cross_data_fname)
 
 # define flow cols 
-pheno_names <- read_xlsx("source_data/pheno_names.xlsx")
+pheno_names_fname <- "source_data/pheno_names.xlsx"
+pheno_names <- read_xlsx(pheno_names_fname)
 flow_cols <- pheno_names$flow_col_name[-1] # remove titer 
+logger("Loaded phenotype names from %s.", pheno_names_fname)
 
 # create flow matrix / remove mice with no flow data 
-q <- length(flow_cols)
+q <- length(flow_cols) 
 J <- q*4 # total number of predictors, incl. interaction terms 
 mice_w_any_flow <- rowSums(is.na(cross_data[,flow_cols])) < q
 flow <- as.matrix(cross_data[mice_w_any_flow,flow_cols]) 
 n <- nrow(flow) # 567 mice with any flow observations 
+logger("%d mice with observations for %d immune traits. With interaction terms, there are %d predictors under selection.", n, q, J)
 
+# column names including interaction terms 
 all_colnames <- c(colnames(flow), 
                   paste0(colnames(flow), "_sex"), 
                   paste0(colnames(flow), "_SARS"),
@@ -51,7 +74,7 @@ options(na.action = "na.pass")
 X <- model.matrix(~ sex + infection, data = cross_data) # for cases where downstream analyses involve y 
 options(na.action = "na.omit")
 X <- X[mice_w_any_flow,]
-p <- ncol(X)
+p <- ncol(X) # number of fixed effects
 y <- y[mice_w_any_flow]
 
 # genotype data
@@ -59,18 +82,18 @@ geno <- cross_data[mice_w_any_flow,
                    c(which(colnames(cross_data) == "gUNC145909"):which(colnames(cross_data) == "mJAX00187167"))]
 
 # imputed genotype data 
-cross_data_imp <- load_cross_as_df("derived_data/cross_imputed.csv", n_geno_start = 122)
+cross_imp_geno_fname <- "derived_data/cross_imputed.csv"
+cross_data_imp <- load_cross_as_df(cross_imp_geno_fname, n_geno_start = 122)
 geno_imp <- cross_data_imp[mice_w_any_flow, 
                            c(which(colnames(cross_data_imp) == "gUNC145909"):which(colnames(cross_data_imp) == "mJAX00187167"))]
+logger("Imputed genotype data loaded from %s.", cross_imp_geno_fname)
 
-cross_dataI <- read_csv("derived_data/cross_data_flow_imp.csv")
+cross_data_imp_flow_fname <- "derived_data/cross_data_flow_imp.csv"
+cross_dataI <- read_csv(cross_data_imp_flow_fname)
 flow_imp <- cross_dataI[,paste0(flow_cols, "_imp")]
+logger("Imputed immune data loaded from %s.", cross_data_imp_flow_fname)
 
 # ---------------------------priors/initial values---------------------------- #
-n <- nrow(flow) # number of mice 
-q <- ncol(flow) # number of effects subject to selection 
-p <- ncol(X) # number of fixed effects
-
 # imputation priors 
 # prior on Bimp ~ MN(M0, Lambda0, Sigma)
 M0 <- matrix(0, p, q) # initialize beta_imp and set M0 (prior mean)  
@@ -129,10 +152,10 @@ nchains <- ncores <- 4
 dnm_fname <- "results/var_selection/res_dnm.RDS"
 
 if (file.exists(dnm_fname)){
-  message(paste("Variable selection results already exist in", dnm_fname))
+  logger("Variable selection results already exist, loading from %s.", dnm_fname)
   res_dnm <- readRDS("results/var_selection/res_dnm.RDS")
 } else {
-  message(paste("Running variable selection for", S, "iterations over", nchains, "chains"))
+  logger("Running variable selection for %d iterations (with %d burn-in) over %d chains (%d CPUs).", S, burn_in, nchains, ncores)
   cl <- makeCluster(ncores) 
   registerDoParallel(cl)
   res_dnm <- foreach(ch = 1:nchains, .packages = c("mvtnorm")) %dopar% {
@@ -272,17 +295,39 @@ if (file.exists(dnm_fname)){
   }
   stopCluster(cl)
   
-  saveRDS(res_dnm, file = "results/var_selection/res_dnm.RDS")
+  saveRDS(res_dnm, file = dnm_fname)
+  logger("Variable selection results saved to %s.", dnm_fname)
 }
 
 # ----------------------------sampler performance----------------------------- #
+diag_dir <- "results/var_selection/diagnostics"
+ensure_directory(diag_dir)
+
 params <- c("beta", "psi", "gamma", "delta", "sigma2")
-for (param in params){
-  mcmc_list <- mcmc.list(lapply(res_dnm, function(ch) mcmc(ch[[param]])))
-  #traceplot(mcmc_list)
-  #autocorr.plot(mcmc_list)
-  print(effectiveSize(mcmc_list))
-  print(gelman.diag(mcmc_list, autoburnin = FALSE))
+
+if (run_mcmc_diag){
+  for (param in params){
+    mcmc_list <- mcmc.list(lapply(res_dnm, function(ch) mcmc(ch[[param]])))
+    param_length <- if (is.null(ncol(mcmc_list[[1]]))) 1 else ncol(mcmc_list[[1]])
+    if (param_length == 1){
+      png(paste0(diag_dir, "/", param, "_traceplot.png"))
+      traceplot(mcmc_list)
+      dev.off()
+      
+      logger("Effective size for %s: %.2f", param, effectiveSize(mcmc_list))
+      
+      #autocorr.plot(mcmc_list)
+      #print(gelman.diag(mcmc_list, autoburnin = FALSE))
+    } else {
+      for (i in 1:param_length){
+        png(paste0(diag_dir, "/", param, "_", i, "_traceplot.png"))
+        traceplot(mcmc_list)
+        dev.off()
+        
+        logger("Effective size for %s[%d]: %.2f", param, i, effectiveSize(mcmc_list)[i])
+      }
+    }
+  }
 }
 
 # mixing quality 
@@ -300,13 +345,14 @@ for (param in params) {
 }
 df <- data.frame(param = lab_all, rhat = rhat_all)
 ecdf <- ggplot(df, aes(x = rhat)) +
-  stat_ecdf(size = 0.8) +
+  stat_ecdf(linewidth = 0.8) +
   geom_vline(xintercept = 1.01, linetype = 2) +
   geom_vline(xintercept = 1.05, linetype = 3) +
   labs(
     x = expression(hat(R)),
     y = "ECDF",
     title = expression(hat(R)~"distribution across all"~beta~", "~sigma^2~", "~psi~", "~gamma~", "~delta))
+ggsave(paste0(diag_dir, "/ECDF.png"))
 
 # descriptive fit diagnostic (prediction after selection): in-sample Bayesian R-squared 
 bayesR2 <- bayes_R2(res_dnm, y, X, flow)
@@ -316,6 +362,7 @@ R2_hist <- ggplot(bayesR2_df, aes(x = r2)) +
   labs(x = expression(Bayesian~R^2), title = expression("In-sample"~Bayesian~R^2)) +
   xlim(c(0,1)) +
   theme_minimal()
+ggsave(paste0(diag_dir, "/in_sample_bayesR2.png"))
 
 # ------------------------------cross-validation------------------------------ #
 PIP_thresh <- 0.23
@@ -323,11 +370,12 @@ R <- 5 # number of repeats of K-fold CV
 K <- 10 # number of folds 
 seed1 <- 123
 
-cv_res_fname <- "results/var_selection/diagnostics/cv_res_list.rds"
+cv_res_fname <- "results/var_selection/cv_res_list.rds"
 if (file.exists(cv_res_fname)){
-  message(paste("CV results already exist in", cv_res_fname))
+  logger("CV results already exist, loading from %s.", cv_res_fname)
   cv_res_list <- readRDS(cv_res_fname)
 } else {
+  logger("Running %d repeats of %d-fold cross-validation over %d cores.", R, K, R)
   cv_dat <- data.frame(mouse_id = cross_data$mouse_ID[mice_w_any_flow],
                        sex_inf = factor(paste0(cross_data$sex[mice_w_any_flow], 
                                                cross_data$infection[mice_w_any_flow])))
@@ -416,18 +464,19 @@ if (file.exists(cv_res_fname)){
       }
     }
     return(list(pip = pip_R,
-                keep_array = keep_R,
+                keep = keep_R,
                 num_sel = num_sel_R,
                 elpd = elpd_R,
                 bayesR2 = bayesR2_R))
   }
   stopCluster(cl)
   
-  ensure_directory("results/var_selection/diagnostics")
-  saveRDS(cv_res_list, "results/var_selection/diagnostics/cv_res_list.rds")
+  ensure_directory(diag_dir)
+  saveRDS(cv_res_list, cv_res_fname)
+  logger("CV results saved to %s.", cv_res_fname)
 }
 
-# predictive accuracy: out-of-sample Bayesian R-squared
+# -----------predictive accuracy: out-of-sample Bayesian R-squared------------ #
 all_R2 <- NULL
 for (r in 1:R){
   for (k in 1:K){
@@ -441,8 +490,10 @@ oosR2_hist <- ggplot(oos_bayesR2_df, aes(x = r2)) +
        title = expression("Out-of-sample"~Bayesian~R^2)) +
   xlim(c(0,1)) +
   theme_minimal()
+ggsave(paste0(diag_dir, "/out_of_sample_bayesR2.png"))
 
-# variable stability
+# -----------------------------variable stability----------------------------- #
+logger("Running variable inclusion stability analysis...")
 J <- ncol(cv_res_list[[1]]$pip) # number of variables
 stability_mat <- matrix(NA, nrow = R*K, ncol = J)
 pip_mat <- matrix(NA, nrow = R*K, ncol = J)
@@ -450,7 +501,7 @@ row_idx <- 0
 for (r in 1:R) {
   for (k in 1:K) {
     row_idx <- row_idx + 1
-    stability_mat[row_idx,] <- cv_res_list[[r]]$keep_R[k,] # was variable j selected in repeat r, fold k?
+    stability_mat[row_idx,] <- cv_res_list[[r]]$keep[k,] # was variable j selected in repeat r, fold k?
     pip_mat[row_idx,] <- cv_res_list[[r]]$pip[k,] # PIPs for this fold
   }
 }
@@ -466,6 +517,10 @@ variable_stability$highly_stable <- variable_stability$stability >= 0.70
 stable_vars <- all_colnames[variable_stability$variable[variable_stability$highly_stable]]
 stable_phenos <- unique(sub("(_sex|_SARS2|_SARS)$", "", stable_vars))
 
+stability_fname <- "results/var_selection/stability.csv"
+write_csv(variable_stability, stability_fname)
+logger("Variable inclusion stability analysis results saved to %s.", stability_fname)
+
 # stability vs mean PIP 
 stability_vs_pip <- ggplot(variable_stability, aes(x = mean_pip, y = stability)) +
   geom_point(aes(color = highly_stable), alpha = 0.6, size = 3) +
@@ -478,11 +533,12 @@ stability_vs_pip <- ggplot(variable_stability, aes(x = mean_pip, y = stability))
        title = "Variable Selection Stability") +
   theme_bw() +
   theme(legend.position = "right")
+ggsave(paste0(diag_dir, "/stability_vs_pip.png"))
 
 # calculate Jaccard similarity across all fold pairs (within and across repeats) 
 n_folds_total <- R * K
 n_pairs <- choose(n_folds_total, 2) # total number of fold pairs
-pairs <- comb(1:n_folds_total, 2)
+pairs <- combn(1:n_folds_total, 2)
 Jvals <- apply(pairs, 2, function(idx) {
   jaccard(stability_mat[idx[1], ], stability_mat[idx[2], ])
 })
@@ -497,6 +553,7 @@ jacc_hist <- ggplot(data.frame(jacc = Jvals), aes(x = jacc)) +
        title = "Pairwise Jaccard similarity") +
   xlim(c(0,1)) +
   theme_minimal()
+ggsave(paste0(diag_dir, "/jacc_hist.png"))
 
 # -------------------------------sampler results------------------------------ #
 gammas_dnm <- do.call(rbind, lapply(res_dnm, function(x) x$gamma))
@@ -512,7 +569,14 @@ important_phenos <- important_phenos[important_phenos %in% stable_phenos]
 
 imp_phenos_df <- data.frame(phenotype = important_phenos, 
                             stable = important_phenos %in% stable_phenos)
-write_csv(imp_phenos_df, "results/var_selection/important_phenos.csv")
+imp_phenos_fname <- "results/var_selection/important_phenos.csv"
+write_csv(imp_phenos_df, imp_phenos_fname)
+logger("List of important phenotypes saved to %s.", imp_phenos_fname)
+
+# calculate multiple correlation coefficient 
+multiR2s <- sapply(1:q, function(j) summary(lm(flow[,j] ~ flow[,-j]))$r.squared)
+multiR2_df <- data.frame(phenotype = colnames(flow),
+                         multiR2 = multiR2s)
 
 # calculate joint PIPs
 base_name <- gsub("(_sex|_SARS|_SARS2)$", "", all_colnames)
@@ -525,13 +589,10 @@ jointPIPdf <- merge(jointPIPdf, multiR2_df, by.x = "base", by.y = "phenotype")
 jointPIPdf$VIF <- 1 / (1 - jointPIPdf$multiR2)
 jointPIPdf <- jointPIPdf[order(jointPIPdf$jointPIP, decreasing = TRUE),]
 
-# calculate multiple correlation coefficient 
-multiR2s <- sapply(1:q, function(j) summary(lm(flow[,j] ~ flow[,-j]))$r.squared)
-multiR2_df <- data.frame(phenotype = colnames(flow),
-                         multiR2 = multiR2s)
 # is there a relationship between multiple R-squared and joint PIP?
 summary(lm(jointPIP ~ multiR2, data = jointPIPdf))
-plot(jointPIPdf$multiR2, jointPIPdf$jointPIP)
+
+#plot(jointPIPdf$multiR2, jointPIPdf$jointPIP)
 
 # wide table with PIPs and joint PIPs
 PIP_wide <- PIPdf %>% 
@@ -637,7 +698,7 @@ get_col <- function(b, t) {
 }
 
 #bases_keep <- important_phenos
-bases_keep <- flow_phenos
+bases_keep <- flow_cols
 
 virus_conditional_means <- map_dfr(bases_keep, function(b) {
   
@@ -755,14 +816,12 @@ dir_summary[which.min(dir_summary$prop_same_sign),]
 
 # -------------------------------Supp. Table 1-------------------------------- #
 varcomp_data <- read_csv("results/var_comp_res.csv", show_col_types = FALSE)
-clust_ord <- read_csv("results/qtl_mapping/hclust_pheno_order.csv")
 stbl1 <- varcomp_data %>% 
   left_join(pheno_names, by = c("pheno" = "flow_col_name")) %>%
   left_join(jointPIPdf, by = c("pheno" = "base")) %>%
   left_join(virus_conditional_means, by = c("pheno" = "base")) %>%
   left_join(dir_summary, by = c("pheno" = "base")) %>% 
-  left_join(clust_ord, by = "pheno") %>%
-  select(flow_display_name, multiR2, VIF, h2, h2_lwr, h2_upr, jointPIP, beta_SARS_cond_mean, beta_SARS2_cond_mean, prop_same_sign, n_draws_used, order) %>%
+  select(flow_display_name, multiR2, VIF, h2, h2_lwr, h2_upr, jointPIP, beta_SARS_cond_mean, beta_SARS2_cond_mean, prop_same_sign, n_draws_used) %>%
   mutate(across(starts_with("h2"), ~ .x*100)) %>%
   mutate(across(where(is.numeric) & !all_of("order"), ~ round(.x, 2))) %>%
   arrange(flow_display_name)
@@ -867,7 +926,7 @@ pca_plot <- fviz_pca_ind(pc, geom = "point", habillage = hab, addEllipses = TRUE
 
 # ----------------------------------heatmap----------------------------------- #
 corr <- cor(flow, use = "pairwise.complete.obs")
-dcols <- dist(1-corr, method = "euclidian")
+dcols <- dist(1-corr, method = "euclidean")
 hc_cols <- hclust(dcols, method = "complete")
 hm <- Heatmap(corr, show_row_dend = FALSE, show_row_names = FALSE, 
               show_column_names = FALSE, col = heatmaply::cool_warm(256), 
@@ -884,10 +943,11 @@ hm <- Heatmap(corr, show_row_dend = FALSE, show_row_names = FALSE,
 hmgrob <- grid.grabExpr(draw(hm))
 
 # Labeled heatmap for supplement 
+ensure_directory("figures/supplemental")
 pdf("figures/supplemental/heatmap_labeled.pdf", width = 16, height = 16)
-labeled_hm <- Heatmap(corr, show_row_dend = FALSE, 
+labeled_hm <- Heatmap(corr, show_row_dend = FALSE,
                       row_names_gp = gpar(fontsize = 10), column_names_gp = gpar(fontsize = 10),
-                      col = heatmaply::cool_warm(256), column_dend_height = unit(1,"inches"), 
+                      col = heatmaply::cool_warm(256), column_dend_height = unit(1,"inches"),
                       cluster_columns = as.dendrogram(hc_cols), cluster_rows = as.dendrogram(hc_cols),
                       heatmap_legend_param = list(title = "",
                                                   title_gp = gpar(fontsize = 14, fontface = "bold"),

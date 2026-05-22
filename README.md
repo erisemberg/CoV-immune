@@ -43,7 +43,7 @@ Rscript rqtl_file_prep.R
 
 This integrates genotype data (`source_data/Cr_RB05_miniMUGA-013024_paddedIDs.csv`) and phenotype data (`source_data/F2_phenos_lymph3.xlsx`) into a .csv file formatted for analysis with `R/qtl` ([Broman et al., 2006](https://doi.org/10.1093/bioinformatics/btg112)), stored in `derived_data/RqtlCC006xCC044_ctrlAndSARS.csv`. This file and the `R/qtl` data structures are often used even when the `R/qtl` package is not being used for mapping. 
 
-Prepare dataset with transformed and centered/scaled phenotypes (`derived_data/cross_data.csv`), as well as an `Rqtl` cross object with imputed genotypes:
+Prepare dataset with transformed and centered/scaled phenotypes (`derived_data/cross_data.csv`), as well as an `Rqtl` cross object with imputed genotypes (`derived_data/cross_imputed.csv`):
 
 ```
 Rscript data_processing.R

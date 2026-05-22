@@ -32,6 +32,20 @@ RUN R -e "install.packages('ggh4x')"
 RUN R -e "install.packages('factoextra')"
 RUN R -e "install.packages('cowplot')"
 RUN R -e "install.packages('RColorBrewer')"
+RUN R -e "install.packages('heatmaply')"
+#RUN R -e "install.packages('BiocManager')"
+RUN R -e "BiocManager::install('ComplexHeatmap')"
+RUN R -e "install.packages('ComplexHeatmap')"
+RUN R -e "install.packages('patchwork')"
+RUN R -e "install.packages('ggridges')"
+
+RUN R -e "install.packages('readxl')"
+RUN R -e "install.packages('writexl')"
+
+# Bayesian sampling 
+RUN R -e "install.packages('matrixStats')"
+RUN R -e "install.packages('coda')"
+RUN R -e "install.packages('posterior')"
 
 # packages for lymphoid-integration.R, rqtl_file_prep.R, and data_processing.R included
 # ADD qtl_functions.R PACKAGES	

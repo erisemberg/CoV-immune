@@ -26,6 +26,39 @@ load_cross_as_df <- function(file_name, n_geno_start){
   return(cross_data)
 }
 
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
+# Function to ensure directory exists before creating files in it 
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
+ensure_directory <- function(directory){
+  if(!dir.exists(directory)){
+    dir.create(directory);
+  }
+}
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
+# Function to create logger function 
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
+make_logger <- function(filename, sep = "\n") {
+  if(file.exists(filename)) {
+    file.remove(filename)
+  }
+  
+  function(...) {
+    args <- list(...)
+    
+    text <- if(length(args) == 1) {
+      paste(capture.output(print(args[[1]])), collapse = "\n")
+    } else {
+      sprintf(...)
+    }
+    
+    cat(text, file = filename, sep = sep, append = TRUE)
+  }
+}
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
+# bayes_R2
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
 bayes_R2 <- function(res, y, X, flow, resid_based = FALSE){
   n <- length(y)
   r2_all <- vector("list", length(res_dnm)) 
