@@ -1,6 +1,6 @@
 # CoV-immune
 
-NOTE 4/1/26: this repo is in progress. All code and data to generate results are present, but container / workflow testing is ongoing. 
+NOTE 5/22/26: this repo is in progress. All code and data to generate results are present, but container / workflow testing is ongoing. Workflow has been tested through "variable selection."
 
 Environment prep
 -----------------------
@@ -97,11 +97,14 @@ This script performs:
 * Create Figure 1 and Supp. Figure 1 (saved to `figures/Figure1.png` and `figures/supplemental/SuppFig1.png`)
 
 ## Variable selection 
-Perform variable selection and generate Figure 2. This is set up to run 5000 iterations of a Gibbs sampler, in addition to 5 repeats of 10-fold cross-validation, so is computationally intensive. 
+
+Perform variable selection and generate Figure 2:
 
 ```
 Rscript var_selection.R 
 ```
+
+This is set up to run 4 chains of a Gibbs sampler with 5000 each, followed by 5 repeats of 10-fold cross-validation. The Gibbs sampler is run in parallel by chain, and CV is run in parallel by repeat. 
 
 ## QTL mapping  
 Perform QTL mapping on a high-performance computing cluster using SLURM (requests enough CPUs to run in parallel by trait): 
