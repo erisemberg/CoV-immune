@@ -590,9 +590,10 @@ jointPIPdf$VIF <- 1 / (1 - jointPIPdf$multiR2)
 jointPIPdf <- jointPIPdf[order(jointPIPdf$jointPIP, decreasing = TRUE),]
 
 # is there a relationship between multiple R-squared and joint PIP?
-summary(lm(jointPIP ~ multiR2, data = jointPIPdf))
-
-#plot(jointPIPdf$multiR2, jointPIPdf$jointPIP)
+lm_coef <- coef(summary(lm(jointPIP ~ multiR2, data = jointPIPdf)))
+logger("Effect of correlation coefficient on joint PIP estimated at %.2f (p = %.2e)", 
+       lm_coef["multiR2", "Estimate"],
+       lm_coef["multiR2", "Pr(>|t|)"])
 
 # wide table with PIPs and joint PIPs
 PIP_wide <- PIPdf %>% 
