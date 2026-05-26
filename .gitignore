@@ -7,6 +7,9 @@
 # files being processed 
 /to_delete_or_process/
 
+# R project 
+cov-immune.Rproj
+
 # unnecessary bmediatR code / vignettes 
 /code-dependencies/bmediatR-master/.Rbuildignore
 /code-dependencies/bmediatR-master/.gitignore 

@@ -558,7 +558,14 @@ univar_scan <- function(cross, target, covar, gxt = FALSE, wts = NULL, sw = FALS
   lmdata$target <- target [has_target]
   lmdata$add <- rep(NA, nrow(lmdata)) 
   lmdata$dom <- rep(NA, nrow(lmdata)) 
-  if (is.null(wts)){ wts <- rep(1, nrow(lmdata)) }
+  
+  if (is.null(wts)) {
+    wts <- rep(1, nrow(lmdata))
+  } else if (length(wts) == length(target)) {
+    wts <- wts[has_target]
+  } else if (length(wts) != nrow(lmdata)) {
+    stop("Length of wts must be either length(target) or sum(!is.na(target)).")
+  }
   
   # null models and alt formulas for LM
   if (gxt){ 
