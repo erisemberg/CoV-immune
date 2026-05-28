@@ -23,46 +23,6 @@ res_dir <- "results/qtl_mapping"
 ensure_directory(res_dir)
 logger <- make_logger(paste0(res_dir, "/mapping_log.txt"))
 
-# ---------------------------------functions---------------------------------- #
-# defining locally so that this script can be standalone / without dependencies 
-# in case being run on the cluster 
-
-# define row weights (precision weights): w_i = 1 / s2_g(i) 
-make_row_weights <- function(covar, var_by_group, mask_rows) {
-  g <- as.character(covar$trt[mask_rows])
-  w <- 1 / var_by_group[g]
-  return(w)
-}
-
-# permutation test for 
-univar_perm_gxt <- function(cross, target, covar, num_perms = 1000, var_by_group){
-  n <- length(target) 
-  max_logPs <- rep(NA, num_perms)
-  
-  for (i in 1:num_perms){
-    samp <- sample(x = 1:n, size = n)
-    # define weights
-    covar_i <- covar[samp,]
-    y_i <- target[samp]
-    has_y <- !is.na(y_i)
-    wts <- make_row_weights(covar_i, var_by_group, has_y)
-    
-    res <- try(univar_scan(cross, target = y_i, covar = covar_i, gxt = TRUE, wts = wts), silent = TRUE)
-    if (inherits(res, "try-error")) { message("Skipping permutation ", i); next }
-    
-    # get max log P per marker (between p_overall, p_G, and p_GxT)
-    max_logPs_permarker <- apply(res[,3:5], 1, max, na.rm = TRUE)
-    # max of max log Ps
-    max_logPs[i] <- max(max_logPs_permarker, na.rm = TRUE) 
-  }
-  
-  max_logPs <- max_logPs[!is.na(max_logPs)] # remove NAs
-  # fit GEV distribution 
-  fitgev <- fevd(max_logPs, type = "GEV")
-  fitgev <- add_attribute(fitgev, "class", c("permgev", "fevd"))
-  return(fitgev)
-}
-
 # ---------------------------------load data---------------------------------- #
 # raw phenotype data, covariates, genotype data
 cross_fname <- "derived_data/RqtlCC006xCC044_ctrlAndSARS.csv"
@@ -89,11 +49,16 @@ logger("covariate dataframe includes the following covariates: %s", paste(colnam
 pheno_names <- read_xlsx("source_data/pheno_names.xlsx")
 all_phenos <- pheno_names$flow_col_name
 p <- length(all_phenos)
-flow_cols <- all_phenos[-1] # remove titer 
-q <- length(flow_cols)
 
 groups <- c("PBS", "SARSCoV", "SARS2CoV", "GxT")
-group_dirs <- c("PBS" = "PBS", "SARSCoV" = "SARS", "SARS2CoV" = "SARS2", "GxT" = "GxT")
+group_dirs <- c("PBS" = "PBS/", 
+                "SARSCoV" = "SARS/", 
+                "SARS2CoV" = "SARS2/", 
+                "GxT" = "GxT/")
+group_names <- c("PBS" = "Control", 
+                 "SARSCoV" = "SARS-CoV", 
+                 "SARS2CoV" = "SARS-CoV-2", 
+                 "GxT" = "Combined")
 
 mod_rds_dir <- paste0(res_dir, "/modRDS/")
 ensure_directory(mod_rds_dir)
@@ -118,7 +83,9 @@ doParallel::registerDoParallel(cl)
 
 logger("performing QTL mapping for %d traits in parallel over %d cores.", p, ncores)
 
-foreach(i = 1:p, .packages = c("qtl", "extRemes")) %dopar% { 
+foreach(i = 1:p, .packages = c("qtl", "extRemes"), 
+        .export = c("summary.permgev", "make_row_weights", "univar_scan",
+                    "univar_perm", "univar_perm_gxt")) %dopar% { 
   pheno_name <- all_phenos[i] 
   groups <- if (pheno_name == "Titer") c("SARSCoV", "SARS2CoV") else c("PBS", "SARSCoV", "SARS2CoV", "GxT")
   
@@ -127,6 +94,8 @@ foreach(i = 1:p, .packages = c("qtl", "extRemes")) %dopar% {
     ensure_directory(paste0(mod_rds_dir, group_dir))
     ensure_directory(paste0(perm_rds_dir, group_dir))
     ensure_directory(paste0(scan_dir, group_dir))
+    
+    group_disp_name <- group_names[[group]]
     
     if (group %in% c("PBS", "SARSCoV", "SARS2CoV")){ # stratified 
       pheno <- cross_data[[pheno_name]][cross_data$infection == group]
@@ -157,23 +126,23 @@ foreach(i = 1:p, .packages = c("qtl", "extRemes")) %dopar% {
     } else {
       mod <- univar_scan(cross_g, pheno, covar_g, gxt = gxt, wts = wts) 
     }
-    saveRDS(mod, paste0(mod_rds_dir, group_dir, "/", pheno_name, ".rds")) # save mod to RDS 
+    saveRDS(mod, paste0(mod_rds_dir, group_dir, pheno_name, ".rds")) # save mod to RDS 
 
     # permutation test 
     if (pheno_name == "Titer"){
-      perm <- scanone(cross_g, pheno.col = "Titer", model = "2part", n.perm = num_perms, n.cluster = 4)
+      perm <- scanone(cross_g, pheno.col = "Titer", model = "2part", n.perm = num_perms)
     } else if (group == "GxT"){
       perm <- univar_perm_gxt(cross_g, pheno, covar_g, num_perms = num_perms, var_by_group = s2)
     } else {
-      perm <- univar_perm(cross_g, pheno, covar_g, num_perms) # permutation test (univariate)
+      perm <- univar_perm(cross_g, pheno, covar_g, num_perms) 
     }
-    saveRDS(perm, paste0(perm_rds_dir, group_dir, "/", pheno_name, ".rds")) # save perm to RDS
+    saveRDS(perm, paste0(perm_rds_dir, group_dir, pheno_name, ".rds")) # save perm to RDS
     
     # save univariate genome scan to png  
     lodcols <- if(group == "GxT" | pheno_name == "Titer") { c(1:3) } else { 1 }
-    png(paste0(scan_dir, group_dir, "/", pheno_name, ".png"), width = 750)
+    png(paste0(scan_dir, group_dir, pheno_name, ".png"), width = 750)
     plot(mod, ylab = "", xlab = "", lodcolumn = lodcols,
-         main = paste0(pheno_name, " (", group_dir, ")"), 
+         main = paste0(pheno_name, " (", group_disp_name, ")"), 
          alternate.chrid = T, 
          cex.main = 2, cex.axis = 2)
     title(ylab = "-log(P)", line = 2.5, cex.lab = 2)

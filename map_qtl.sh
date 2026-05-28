@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH  -n 1
-#SBATCH --cpus-per-task=105
+#SBATCH --cpus-per-task=106
 #SBATCH -t 1-
 #SBATCH --mem=80g
 #SBATCH --mail-type=end,fail

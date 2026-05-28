@@ -849,7 +849,7 @@ univar_perm <- function(cross, target, covar, num_perms = 1000, gxt = FALSE, wts
   return(fitgev)
 }
 
-# Final row weights function (precision weights): w_i = 1 / δ_g(i)^2
+# define row weights (precision weights): w_i = 1 / s2_g(i) 
 make_row_weights <- function(covar, var_by_group, mask_rows) {
   g <- as.character(covar$trt[mask_rows])
   w <- 1 / var_by_group[g]
@@ -888,10 +888,6 @@ univar_perm_gxt <- function(cross, target, covar, num_perms = 1000, var_by_group
   fitgev <- add_attribute(fitgev, "class", c("permgev", "fevd"))
   return(fitgev)
 }
-
-
-
-
 
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++
