@@ -8,4 +8,4 @@
 
 module load r/4.4.0
 
-Rscript map_qtl.R --args --mode=slurm
+Rscript map_qtl.R --args --mode=slurm --hpc_dir=/work/users/e/r/erisembe/CoV-immune-main/

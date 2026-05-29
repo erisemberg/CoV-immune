@@ -1,3 +1,5 @@
+source("code-dependencies/cov_qtl_functions.R")
+source("code-dependencies/cmdline.R")
 library(readr)
 library(readxl)
 library(dplyr)
@@ -8,17 +10,16 @@ library(qtl)
 library(nlme)
 library(lme4qtl)
 library(extRemes)
-source("code-dependencies/cov_qtl_functions.R")
-source("code-dependencies/cmdline.R")
 
 run_mode <- cmdline.option("mode", default = "local", allowed.values = c("local", "slurm"))
 # if running via slurm, set working directory to HPC directory
 if (run_mode == "slurm"){
-  hpc_dir <- cmdline.string("hpc_dir", default = "/work/users/e/r/erisembe/Coronavirus/cov-immune")
+  hpc_dir <- cmdline.string("hpc_dir")
   setwd(hpc_dir)
 }
 
 ensure_directory("results")
+ensure_directory("figures")
 res_dir <- "results/qtl_mapping"
 ensure_directory(res_dir)
 logger <- make_logger(paste0(res_dir, "/mapping_log.txt"))
@@ -64,7 +65,7 @@ mod_rds_dir <- paste0(res_dir, "/modRDS/")
 ensure_directory(mod_rds_dir)
 perm_rds_dir <- paste0(res_dir, "/permRDS/")
 ensure_directory(perm_rds_dir)
-scan_dir <- paste0(res_dir, "/scans/")
+scan_dir <- paste0("figures/QTL_scans/")
 ensure_directory(scan_dir)
 
 num_perms <- 1000

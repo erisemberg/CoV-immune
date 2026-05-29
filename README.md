@@ -1,6 +1,6 @@
 # CoV-immune
 
-NOTE 5/22/26: this repo is in progress. All code and data to generate results are present, but container / workflow testing is ongoing. Workflow has been tested through "variable selection."
+NOTE 5/29/26: this repo is in progress. All code and data to generate results are present, but container / workflow testing is ongoing. Workflow has been tested through "Variable selection."
 
 Environment prep
 -----------------------
@@ -98,13 +98,20 @@ This script performs:
 
 ## Variable selection 
 
-Perform variable selection and generate Figure 2:
+Perform variable selection:
 
 ```
 Rscript var_selection.R 
 ```
 
-This is set up to run 4 chains of a Gibbs sampler with 5000 each, followed by 5 repeats of 10-fold cross-validation. The Gibbs sampler is run in parallel by chain, and CV is run in parallel by repeat. 
+This is set up to run 4 chains of a Gibbs sampler with 5000 each, followed by 5 repeats of 10-fold cross-validation (CV). The Gibbs sampler is run in parallel by chain (4 chains), and CV is run in parallel by repeat (5 repeats). This script creates the following:
+1. Log file in `results/var_selection/bayesian_log.txt`
+2. R object with MCMC samples in `results/var_selection/res_dnm.RDS`. If this file is created, subsequent runs will skip the MCMC sampler and load the results from file. To re-run the sampler, you must delete this file. 
+3. R object with CV results in `results/var_selection/cv_res_list.rds`. If this file is created, subsequent runs will skip the CV code and load the results from file. To re-run CV, you must delete this file. 
+4. List of important phenotypes with stability information in `results/var_selection/important_phenos.csv`
+5. Figure 2 in `figures/Figure2.png`
+6. Supp. Figure 2 in `figures/supplemental/heatmap_labeled.pdf` and Supp. Figure 3 in `figures/supplemental/gibbs_performance.png`
+7. Supp. Table 1 in `results/var_selection/STable1.xlsx`, which will be updated in later analyses 
 
 ## QTL mapping  
 Perform QTL mapping on a high-performance computing cluster using SLURM (requests enough CPUs to run in parallel by trait): 
@@ -113,11 +120,21 @@ Perform QTL mapping on a high-performance computing cluster using SLURM (request
 sbatch map_qtl.sh
 ```
 
+*You must edit map_qtl.sh and set `hpc_dir` to the appropriate directory on your cluster.*
+
 or locally (runs in parallel using available CPUs):
 
 ```
 Rscript map_qtl.R
 ```
+
+This will create: 
+1. Log file in `results/qtl_mapping/mapping_log.txt`
+2. QTL scan R objects in `results/qtl_mapping/modRDS` 
+3. Permutation R objects in `results/qtl_mapping/permRDS`
+4. QTL scan plots in `figures/QTL_scans/`.
+
+*Note that due to permutation testing in combined QTL mapping, this is computationally intensive. With 1000 permutations, the set of analyses (stratified in control, SARS-CoV, and SARS-CoV-2, and combined) can take ~15 hours per trait. It will be much faster to run on an HPC cluster.*
 
 Summarize QTL mapping results and create Figure 3:
 
