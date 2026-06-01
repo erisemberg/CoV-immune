@@ -1,6 +1,6 @@
 # CoV-immune
 
-NOTE 5/29/26: this repo is in progress. All code and data to generate results are present, but container / workflow testing is ongoing. Workflow has been tested through "Variable selection."
+NOTE 6/1/26: this repo is in progress. All code and data to generate results are present, but container / workflow testing is ongoing. Workflow has been tested through "QTL mapping."
 
 Environment prep
 -----------------------
@@ -128,7 +128,7 @@ or locally (runs in parallel using available CPUs):
 Rscript map_qtl.R
 ```
 
-This will create: 
+This code will generate: 
 1. Log file in `results/qtl_mapping/mapping_log.txt`
 2. QTL scan R objects in `results/qtl_mapping/modRDS` 
 3. Permutation R objects in `results/qtl_mapping/permRDS`
@@ -136,11 +136,16 @@ This will create:
 
 *Note that due to permutation testing in combined QTL mapping, this is computationally intensive. With 1000 permutations, the set of analyses (stratified in control, SARS-CoV, and SARS-CoV-2, and combined) can take ~15 hours per trait. It will be much faster to run on an HPC cluster.*
 
-Summarize QTL mapping results and create Figure 3:
+Summarize QTL mapping results:
 
 ```
 Rscript summarizeQTL.R
 ```
+
+This code will generate:
+1. QTL mapping results in `results/qtl_mapping/condensed_qtl.xlsx` (equivalent to Supp. Table 2, with formatting changes)
+2. Figure 3 in `figures/Figure3.png`
+3. Supp. Table 1 in `results/var_selection/STable1.xlsx` (this is primarily variable selection results, but is finalized with this script because it has a column `order` indicating the order of phenotypes on the y-axis in Fig. 3A)
 
 ## Mediation analysis  
 Run mediation analysis and create Figure 4:

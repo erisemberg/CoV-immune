@@ -374,6 +374,8 @@ cv_res_fname <- "results/var_selection/cv_res_list.rds"
 if (file.exists(cv_res_fname)){
   logger("CV results already exist, loading from %s.", cv_res_fname)
   cv_res_list <- readRDS(cv_res_fname)
+  R <- length(cv_res_list)
+  K <- length(cv_res_list[[1]]$elpd)
 } else {
   logger("Running %d repeats of %d-fold cross-validation over %d cores.", R, K, R)
   cv_dat <- data.frame(mouse_id = cross_data$mouse_ID[mice_w_any_flow],
@@ -822,10 +824,8 @@ stbl1 <- varcomp_data %>%
   left_join(jointPIPdf, by = c("pheno" = "base")) %>%
   left_join(virus_conditional_means, by = c("pheno" = "base")) %>%
   left_join(dir_summary, by = c("pheno" = "base")) %>% 
-  select(flow_display_name, multiR2, VIF, h2, h2_lwr, h2_upr, jointPIP, beta_SARS_cond_mean, beta_SARS2_cond_mean, prop_same_sign, n_draws_used) %>%
-  mutate(across(starts_with("h2"), ~ .x*100)) %>%
-  mutate(across(where(is.numeric) & !all_of("order"), ~ round(.x, 2))) %>%
-  arrange(flow_display_name)
+  select(pheno, flow_display_name, multiR2, VIF, h2, h2_lwr, h2_upr, jointPIP, 
+         beta_SARS_cond_mean, beta_SARS2_cond_mean, prop_same_sign, n_draws_used)
 writexl::write_xlsx(stbl1, "results/var_selection/STable1.xlsx")
 
 

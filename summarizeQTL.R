@@ -44,6 +44,7 @@ geno_map <- list(A = "CC006", B = "CC044")
 
 qtl_map <- read_csv("source_data/qtl_map.csv")
 
+ensure_directory("results/qtl_mapping")
 ensure_directory("figures/qtl_mapping")
 
 # ------------------------------adjust p-values------------------------------- #
@@ -187,7 +188,6 @@ chr_boundaries <- chr_info %>%
 chr_bands <- chr_info %>%
   mutate(band = as.integer(factor(chr)) %% 2)
 
-
 # order by hclust based on similarity of QTL scan
 mat <- df_plot %>%
   select(phenotype, infection, marker_idx, adjP_clip) %>%
@@ -204,9 +204,6 @@ hc <- hclust(dist(dat), method = "complete")
 pheno_order <- rownames(dat)[hc$order]
 ord_df <- data.frame(pheno = rownames(dat),
                      order = hc$order)
-write_csv(ord_df, "results/qtl_mapping/hclust_pheno_order.csv")
-
-### MAKE SUPP. TABLE 1 
 
 # order by hclust based on genetic correlations 
 # library(sommer)
@@ -227,6 +224,18 @@ write_csv(ord_df, "results/qtl_mapping/hclust_pheno_order.csv")
 # )
 # G <- cov2cor(fit$sigma$`u:mouse_ID`)
 
+# -----------------------------make supp. table 1----------------------------- #
+stbl1 <- read_xlsx("results/var_selection/STable1.xlsx")
+stbl1 <- stbl1 %>% 
+  left_join(ord_df, by = "pheno") %>%
+  select(flow_display_name, multiR2, VIF, h2, h2_lwr, h2_upr, jointPIP, 
+         beta_SARS_cond_mean, beta_SARS2_cond_mean, prop_same_sign, n_draws_used, order) %>%
+  mutate(across(starts_with("h2"), ~ .x*100)) %>%
+  mutate(across(where(is.numeric) & !all_of("order"), ~ round(.x, 2))) %>%
+  arrange(flow_display_name)
+writexl::write_xlsx(stbl1, "results/var_selection/STable1.xlsx")
+
+# ------------------------------back to plotting------------------------------ #
 df_plot2 <- df_plot %>%
   mutate(phenotype = factor(phenotype, levels = pheno_order),
          infection = factor(infection, levels = c("PBS", "SARSCoV", "SARS2CoV", "GxT")))
