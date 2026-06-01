@@ -3,7 +3,7 @@ library(lme4) # for modeling random effects
 library(MESS) # for AUC calculation 
 library(plyr)
 library(tidyverse)
-#library(dplyr)
+library(dplyr)
 library(readr)
 library(shades)
 library(ranger)

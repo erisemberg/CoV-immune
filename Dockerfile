@@ -38,16 +38,17 @@ RUN R -e "BiocManager::install('ComplexHeatmap')"
 RUN R -e "install.packages('ComplexHeatmap')"
 RUN R -e "install.packages('patchwork')"
 RUN R -e "install.packages('ggridges')"
-
-RUN R -e "install.packages('readxl')"
-RUN R -e "install.packages('writexl')"
+RUN R -e "install.packages('gridExtra')"
 
 # Bayesian sampling 
 RUN R -e "install.packages('matrixStats')"
 RUN R -e "install.packages('coda')"
 RUN R -e "install.packages('posterior')"
 
-# packages for lymphoid-integration.R, rqtl_file_prep.R, and data_processing.R included
-# ADD qtl_functions.R PACKAGES	
+RUN R -e "install.packages('readxl')"
+RUN R -e "install.packages('writexl')"
+RUN R -e "install.packages('UpSetR')"
+# RUN R -e "install.packages('ggplotify')"
+
 
 # RUN R -e "BiocManager::install('rtracklayer')"

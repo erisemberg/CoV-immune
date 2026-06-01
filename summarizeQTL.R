@@ -1,11 +1,15 @@
-library(qtlpvl)
+#library(qtlpvl)
 library(qtl)
+library(plyr)
+library(dplyr)
 library(tidyverse)
 library(readxl)
 library(extRemes)
-library(ggplotify)
+#library(ggplotify)
 library(cowplot)
 library(grid)
+library(UpSetR)
+library(gridExtra)
 source("code-dependencies/cov_qtl_functions.R")
 
 # ---------------------------------load data---------------------------------- #
@@ -38,97 +42,118 @@ group_lookup <- c("C" = "PBS", "1" = "SARSCoV", "2" = "SARS2CoV", "A" = "GxT")
 
 geno_map <- list(A = "CC006", B = "CC044")
 
-qtl_map <- read_csv("results/qtl_map.csv")
+qtl_map <- read_csv("source_data/qtl_map.csv")
+
+ensure_directory("figures/qtl_mapping")
 
 # ------------------------------adjust p-values------------------------------- #
+ensure_directory("results/qtl_mapping/p_adjust/")
+
 for (group in groups){
   group_dir <- group_dirs[[group]]
-  minPs <- NULL
-  for (k in 1:q){
-    pheno <- all_phenos[k]
-    if (group %in% c("PBS", "GxT") & pheno == "Titer"){ 
-      minPs <- c(minPs, NA)
-      next 
-    }
-    mod_fname <- paste0("results/qtl_mapping/modRDS/", group_dir, "/", pheno, ".rds")
-    mod <- readRDS(mod_fname)
-    perm_fname <- paste0("results/qtl_mapping/permRDS/", group_dir, "/", pheno, ".rds")
-    perm <- readRDS(perm_fname)
-    
-    if (group %in% strat_groups & pheno != "Titer"){
-      max_nlogP <- max(mod$lod)
-      fevdsum <- summary.fevd(perm)
-    } else if (group == "GxT"){ 
-      max_nlogP <- max(unlist(mod[,3:5]))  
-      fevdsum <- summary.fevd(perm)
-    } else { # Titer 
-      mod_df <- as.data.frame(unclass(mod))[,3:5]
-      max_nlogP <- max(mod_df, na.rm = TRUE) # for simplicity, calling nlogP even though its an LOD for Titer 
-      max_col <- which(mod_df == max_nlogP, arr.ind = TRUE)[2] 
-      fevdsum <- summary(fevd(unclass(perm)[,max_col]))
-    }
-    minP <- pevd(q = max_nlogP, loc = fevdsum$par[1], scale = fevdsum$par[2],
-                 shape = fevdsum$par[3], lower.tail = FALSE)
-    minPs <- c(minPs, minP)
-  }
+  p_adj_fname <- paste0("results/qtl_mapping/p_adjust/", group_dir, ".csv")
   
-  # run p.adjust on minimum p-values from this group, create df and save 
-  df <- data.frame(phenotype = all_phenos, 
-                   pval = minPs, 
-                   qval = p.adjust(minPs, method = "BH"), 
-                   rank = rank(minPs, ties.method = "last"))
-  df <- df[order(df$rank),]
-  write_csv(df, paste0("results/qtl_mapping/p_adjust/", group_dir, ".csv"))
+  if (file.exists(p_adj_fname)){
+    sprintf("experiment-wide adjusted p-vals already calculated for %s, loading from %s", group_dir, p_adj_fname)
+  } else {
+    minPs <- NULL
+    for (k in 1:q){
+      pheno <- all_phenos[k]
+      
+      if (group %in% c("PBS", "GxT") & pheno == "Titer"){ 
+        minPs <- c(minPs, NA)
+        next 
+      }
+      
+      mod_fname <- paste0("results/qtl_mapping/modRDS/", group_dir, "/", pheno, ".rds")
+      mod <- readRDS(mod_fname)
+      perm_fname <- paste0("results/qtl_mapping/permRDS/", group_dir, "/", pheno, ".rds")
+      perm <- readRDS(perm_fname)
+      
+      if (group %in% strat_groups & pheno != "Titer"){
+        max_nlogP <- max(mod$pval)
+        fevdsum <- summary.fevd(perm)
+      } else if (group == "GxT"){ 
+        max_nlogP <- max(unlist(mod[,3:5]))  
+        fevdsum <- summary.fevd(perm)
+      } else { # Titer 
+        mod_df <- as.data.frame(unclass(mod))[,3:5]
+        max_nlogP <- max(mod_df, na.rm = TRUE) # for simplicity, calling nlogP even though its an LOD for Titer 
+        max_col <- which(mod_df == max_nlogP, arr.ind = TRUE)[2] 
+        fevdsum <- summary(fevd(unclass(perm)[,max_col]))
+      }
+      minP <- pevd(q = max_nlogP, loc = fevdsum$par[1], scale = fevdsum$par[2],
+                   shape = fevdsum$par[3], lower.tail = FALSE)
+      minPs <- c(minPs, minP)
+    }
+    
+    # run p.adjust on minimum p-values from this group, create df and save 
+    df <- data.frame(phenotype = all_phenos, 
+                     pval = minPs, 
+                     qval = p.adjust(minPs, method = "BH"), 
+                     rank = rank(minPs, ties.method = "last"))
+    df <- df[order(df$rank),]
+    
+    write_csv(df, p_adj_fname)
+  }
 }
 
 # -------------------------------save all pvals------------------------------- #
-all_pvals <- NULL
-lod_col <- 1 # update when handling GxT, Titer 
-for (group in groups){
-  group_dir <- group_dirs[[group]]
-  # function for calculating experiment-wide q-vals from genome-wide p-vals 
-  fdr_df <- read_csv(paste0("results/qtl_mapping/p_adjust/", group_dir, ".csv"), show_col_types = FALSE)
-  q_from_p <- make_interpolate_fn(fdr_df)
+all_pvals_fname <- "results/qtl_mapping/all_pvals.csv"
+
+if (file.exists(all_pvals_fname)){
+  sprintf("loading all p-values from %s", all_pvals_fname)
+  all_pvals <- read_csv(all_pvals_fname)
+} else {
+  all_pvals <- NULL
+  lod_col <- 1 # update when handling GxT, Titer 
   
-  for (k in seq_len(length(all_phenos))){
-    pheno <- all_phenos[k]
-    if (pheno == "Titer"){ next } # don't show titer in this plot, bc there are 2 p-vals
+  for (group in groups){
+    group_dir <- group_dirs[[group]]
+    # function for calculating experiment-wide q-vals from genome-wide p-vals 
+    fdr_df <- read_csv(paste0("results/qtl_mapping/p_adjust/", group_dir, ".csv"), show_col_types = FALSE)
+    q_from_p <- make_interpolate_fn(fdr_df)
     
-    # nominal (neg log10) p-vlaues 
-    mod_fname <- paste0("results/qtl_mapping/modRDS/", group_dir, "/", pheno, ".rds")
-    mod <- readRDS(mod_fname)
-    df <- as.data.frame(mod)
-    if (group == "GxT"){
-      df$negLogP <- apply(df[,3:5], 1, max) ### SHOULD THIS USE OVERALL P-VAL INSTEAD OF MAX? 
-      df <- df[,-c(3:5)]
+    for (k in seq_len(length(all_phenos))){
+      pheno <- all_phenos[k]
+      if (pheno == "Titer"){ next } # don't show titer in this plot, bc there are 2 p-vals
+      
+      # nominal (neg log10) p-vlaues 
+      mod_fname <- paste0("results/qtl_mapping/modRDS/", group_dir, "/", pheno, ".rds")
+      mod <- readRDS(mod_fname)
+      df <- as.data.frame(mod)
+      if (group == "GxT"){
+        df$negLogP <- apply(df[,3:5], 1, max) ### SHOULD THIS USE OVERALL P-VAL INSTEAD OF MAX? 
+        df <- df[,-c(3:5)]
+      }
+      colnames(df)[3] <- c("negLogP")
+      
+      # genome-wide adjusted p-values 
+      perm_fname <- paste0("results/qtl_mapping/permRDS/", group_dir, "/", pheno, ".rds") 
+      perm <- readRDS(perm_fname)
+      fevdsum <- summary(fevd(mod[[2+lod_col]]))
+      
+      df$adjP <- pevd(q = df$negLogP, 
+                      loc = fevdsum$par[1], scale = fevdsum$par[2], shape = fevdsum$par[3], 
+                      lower.tail = FALSE)
+      
+      # experiment-wide adjusted q-values
+      df$qval <- q_from_p(df$adjP)
+      
+      df <- df %>% 
+        mutate(infection = group, phenotype = pheno, .before = "chr")
+      
+      all_pvals <- rbind(all_pvals, df)
     }
-    colnames(df)[3] <- c("negLogP")
-    
-    # genome-wide adjusted p-values 
-    perm_fname <- paste0("results/qtl_mapping/permRDS/", group_dir, "/", pheno, ".rds") 
-    perm <- readRDS(perm_fname)
-    fevdsum <- summary(fevd(mod[[2+lod_col]]))
-    
-    df$adjP <- pevd(q = df$negLogP, 
-                    loc = fevdsum$par[1], scale = fevdsum$par[2], shape = fevdsum$par[3], 
-                    lower.tail = FALSE)
-    
-    # experiment-wide adjusted q-values
-    df$qval <- q_from_p(df$adjP)
-    
-    df <- df %>% 
-      mutate(infection = group, phenotype = pheno, .before = "chr")
-    
-    all_pvals <- rbind(all_pvals, df)
   }
+  write_csv(all_pvals, "results/qtl_mapping/all_pvals.csv")
 }
-write_csv(all_pvals, "results/qtl_mapping/all_pvals.csv")
 
 # ------------------------------QTL summary plot------------------------------ #
 # create table with marker indices
 marker_index <- all_pvals %>%
   distinct(chr, pos) %>%
-  mutate(marker_idx = row_number())
+  dplyr::mutate(marker_idx = row_number())
 
 # order by hclust based on phenotypic correlation 
 # corr <- cor(flow, use = "pairwise")
@@ -136,26 +161,29 @@ marker_index <- all_pvals %>%
 # pheno_order <- flow_cols[hc$order]
 
 df_plot <- all_pvals %>%
-  mutate(adjP_clip = pmin(adjP, 0.1)) %>%
+  dplyr::mutate(adjP_clip = pmin(adjP, 0.1)) %>%
   left_join(marker_index, by = c("chr", "pos")) 
 #,phenotype = factor(phenotype, levels = pheno_order)
 
 # table for labeling x-axis with chromosome boundaries 
 marker_map <- df_plot %>%
   distinct(marker_idx, chr) %>%
-  arrange(marker_idx)
+  dplyr::arrange(marker_idx)
+
 chr_info <- marker_map %>%
   group_by(chr) %>%
-  summarise(xmin = min(marker_idx) - 0.5,
+  dplyr::summarise(xmin = min(marker_idx) - 0.5,
             xmax = max(marker_idx) + 0.5,
             xmid = (xmin + xmax) / 2,
             .groups = "drop") %>%
-  arrange(as.numeric(as.character(chr)) %>% ifelse(is.na(.), Inf, .))  # optional: numeric chr order
+  dplyr::arrange(as.numeric(as.character(chr)) %>% ifelse(is.na(.), Inf, .))  # optional: numeric chr order
+
 # boundaries between chromosomes (for vertical lines)
 chr_boundaries <- chr_info %>%
   arrange(xmin) %>%
   slice(-1) %>%
   transmute(x = xmin)
+
 chr_bands <- chr_info %>%
   mutate(band = as.integer(factor(chr)) %% 2)
 
@@ -177,6 +205,8 @@ pheno_order <- rownames(dat)[hc$order]
 ord_df <- data.frame(pheno = rownames(dat),
                      order = hc$order)
 write_csv(ord_df, "results/qtl_mapping/hclust_pheno_order.csv")
+
+### MAKE SUPP. TABLE 1 
 
 # order by hclust based on genetic correlations 
 # library(sommer)
@@ -205,7 +235,7 @@ infection_labs <- c(PBS = "Control", SARSCoV = "SARS-CoV", SARS2CoV = "SARS-CoV-
 rug_data <- df_plot2 %>%
   filter(adjP_clip < 0.05) %>%  
   group_by(marker_idx) %>%
-  summarise(qtl_count = n(), .groups = 'drop')
+  dplyr::summarise(qtl_count = n(), .groups = 'drop')
 
 chr_info <- chr_info %>%
   mutate(label_y = ifelse(row_number() %% 2 == 1, 0, -1))
@@ -264,7 +294,6 @@ chr_plot <- chr_plot +
                     ymin = -2.7, ymax = -2.7)
 
 qtl_hm <- plot_grid(qtlsum, rug_plot, chr_plot, nrow = 3, rel_heights = c(10, 1, 0.5), align = "v", axis = "lr")
-qtl_hm
 # use this if background is not blue to distinguish chromosomes 
 #   geom_rect(data = chr_bands, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf,
 #                                 alpha = factor(band)),
@@ -272,121 +301,126 @@ qtl_hm
 #   scale_alpha_manual(values = c(0.06, 0.00), guide = "none") +
 
 # -------------------------------summarize QTL-------------------------------- #
-#all_qtlv1 <- read_csv("results/qtl_mapping/all_qtl.csv")
-all_qtl <- data.frame(infection = character(),
-                      phenotype = character(),
-                      chr = numeric(),
-                      pos = numeric(),
-                      CI_lwr = numeric(),
-                      CI_upr = numeric(),
-                      negLogP = numeric(),
-                      adjP = numeric(),
-                      qval = numeric(),
-                      var_explained = numeric(),
-                      beta = numeric())
+all_qtl_fname <- "results/qtl_mapping/all_qtl.csv"
 
-ix <- 0; lod_col <- 1
-for (group in groups){
-  #method <- group_methods[[group]]
-  group_dir <- group_dirs[[group]]
+if(file.exists(all_qtl_fname)){
+  sprintf("loading all_qtl from file %s", all_qtl_fname)
+  all_qtl <- read_csv(all_qtl_fname)
+} else {
+  all_qtl <- data.frame(infection = character(),
+                        phenotype = character(),
+                        chr = numeric(),
+                        pos = numeric(),
+                        CI_lwr = numeric(),
+                        CI_upr = numeric(),
+                        negLogP = numeric(),
+                        adjP = numeric(),
+                        qval = numeric(),
+                        var_explained = numeric(),
+                        beta = numeric())
+  ix <- 0; lod_col <- 1
   
-  if (group %in% strat_groups){ 
-    cross_g <- subset(cross, ind = (cross$pheno$infection == group)) 
-  } else { # GxT
-    cross_g <- cross 
-  }
-  
-  fdr_df <- read_csv(paste0("results/qtl_mapping/p_adjust/", group_dir, ".csv"), show_col_types = FALSE)
-  q_from_p <- make_interpolate_fn(fdr_df)
-  
-  for (k in seq_len(length(all_phenos))){
-    pheno <- all_phenos[k]
-    if (pheno == "Titer" & group %in% c("PBS", "GxT")){ next } 
+  for (group in groups){
+    #method <- group_methods[[group]]
+    group_dir <- group_dirs[[group]]
     
-    if (group  %in% strat_groups){
-      pheno_data <- cross_data[cross_data$infection == group, pheno][[1]]
+    if (group %in% strat_groups){ 
+      cross_g <- subset(cross, ind = (cross$pheno$infection == group)) 
     } else { # GxT
-      pheno_data <- cross_data[[pheno]] 
+      cross_g <- cross 
     }
     
-    mod_fname <- paste0("results/qtl_mapping/modRDS/", group_dir, "/", pheno, ".rds")
-    mod <- readRDS(mod_fname)
-    perm_fname <- paste0("results/qtl_mapping/permRDS/", group_dir, "/", pheno, ".rds") 
-    perm <- readRDS(perm_fname)
+    fdr_df <- read_csv(paste0("results/qtl_mapping/p_adjust/", group_dir, ".csv"), show_col_types = FALSE)
+    q_from_p <- make_interpolate_fn(fdr_df)
     
-    if (pheno == "Titer"){ # 2-part model; permutation object has 3 columns vs one for GxT QTL mapping 
-      sum <- summary(mod, perms = perm, alpha = 0.05) # using Rqtl functionality instead of GEV, but good enough
-    } else if (group == "GxT"){ # check if any of the 3 p-values are greater than the threshold 
-      sum <- summary(mod, threshold = summary(perm)[1], format = "allpheno")
-      if (sum(duplicated(sum$chr)) > 0){ # deduplicate bc each p-value counts 
-        unique_chrs <- unique(sum$chr)
-        dedupd_sum <- NULL
-        for (j in 1:length(unique_chrs)){
-          chr_sum <- sum[sum$chr == unique_chrs[j],]
-          # choose a row based on highest p-value 
-          max_p <- max(unlist(chr_sum[,3:5]))
-          chosen_row <- chr_sum[(max_p == chr_sum$p_overall)|(max_p == chr_sum$p_G)|(max_p == chr_sum$p_GxT),]
-          dedupd_sum <- rbind(dedupd_sum, chosen_row)
+    for (k in seq_len(length(all_phenos))){
+      pheno <- all_phenos[k]
+      if (pheno == "Titer" & group %in% c("PBS", "GxT")){ next } 
+      
+      if (group  %in% strat_groups){
+        pheno_data <- cross_data[cross_data$infection == group, pheno][[1]]
+      } else { # GxT
+        pheno_data <- cross_data[[pheno]] 
+      }
+      
+      mod_fname <- paste0("results/qtl_mapping/modRDS/", group_dir, "/", pheno, ".rds")
+      mod <- readRDS(mod_fname)
+      perm_fname <- paste0("results/qtl_mapping/permRDS/", group_dir, "/", pheno, ".rds") 
+      perm <- readRDS(perm_fname)
+      
+      if (pheno == "Titer"){ # 2-part model; permutation object has 3 columns vs one for GxT QTL mapping 
+        sum <- summary(mod, perms = perm, alpha = 0.05) # using Rqtl functionality instead of GEV, but good enough
+      } else if (group == "GxT"){ # check if any of the 3 p-values are greater than the threshold 
+        sum <- summary(mod, threshold = summary(perm)[1], format = "allpheno")
+        if (sum(duplicated(sum$chr)) > 0){ # deduplicate bc each p-value counts 
+          unique_chrs <- unique(sum$chr)
+          dedupd_sum <- NULL
+          for (j in 1:length(unique_chrs)){
+            chr_sum <- sum[sum$chr == unique_chrs[j],]
+            # choose a row based on highest p-value 
+            max_p <- max(unlist(chr_sum[,3:5]))
+            chosen_row <- chr_sum[(max_p == chr_sum$p_overall)|(max_p == chr_sum$p_G)|(max_p == chr_sum$p_GxT),]
+            dedupd_sum <- rbind(dedupd_sum, chosen_row)
+          }
+          sum <- dedupd_sum
         }
-        sum <- dedupd_sum
-      }
-    } else { # only need to check the one column (and there won't be duplicates)
-      sum <- summary(mod, threshold = summary(perm)[1])
-    }
-    
-    if (nrow(sum) == 0){ next } 
-    if (pheno != "Titer"){ fevdsum <- summary.fevd(perm) }
-    
-    for (j in 1:nrow(sum)){
-      qtl_driver <- NA
-      ix <- ix + 1
-      # unadjusted p-value 
-      if (pheno == "Titer"){
-        unadj_lod <- max(sum$lod.p.mu[j], sum$lod.p[j], sum$lod.mu[j])
-        lod_col <- which.max(c(sum$lod.p[j], sum$lod.mu[j])) # lod.p.mu is the sum, so want to know which is the main driver of p and mu 
-        qtl_driver <- ifelse(lod_col == 1, "binary", "continuous")
-      } else if (group == "GxT"){
-        unadj_negLogP <- max(sum$p_overall[j], sum$p_G[j], sum$p_GxT[j]) 
-        lod_col <- which.max(c(sum$p_overall[j], sum$p_G[j], sum$p_GxT[j]))
-        qtl_driver <- ifelse(lod_col == 2, "genetic", 
-                             ifelse(lod_col == 3, "GxT", "overall"))
-      } else { 
-        unadj_negLogP <- sum$lod[j]
-        lod_col <- 1
+      } else { # only need to check the one column (and there won't be duplicates)
+        sum <- summary(mod, threshold = summary(perm)[1])
       }
       
-      # chr:position(interval)
-      chr <- sum$chr[j]
-      bayesint_j <- bayesint(mod, chr = chr, lodcolumn = lod_col)
-      lwr <- bayesint_j[1,"pos"]
-      upr <- bayesint_j[3,"pos"]
-      chr_pos <- paste0("Chr ", chr, ": ", 
-                        format(round(sum$pos[j], 2), nsmall = 2), 
-                        " (", format(round(lwr, 2), nsmall = 2), "-", 
-                        format(round(upr,2), nsmall = 2), ")")
+      if (nrow(sum) == 0){ next } 
+      if (pheno != "Titer"){ fevdsum <- summary.fevd(perm) }
       
-      # genome-wide adjusted p-value 
-      if (pheno != "Titer"){
-        adjP <- pevd(q = unadj_negLogP, loc = fevdsum$par[1], scale = fevdsum$par[2], shape = fevdsum$par[3], lower.tail = FALSE)
-      } else {
-        fevdsum <- summary(fevd(mod[[2+lod_col]]))
-        adjP <- pevd(q = unadj_lod, loc = fevdsum$par[1], scale = fevdsum$par[2], shape = fevdsum$par[3], lower.tail = FALSE)
+      for (j in 1:nrow(sum)){
+        qtl_driver <- NA
+        ix <- ix + 1
+        # unadjusted p-value 
+        if (pheno == "Titer"){
+          unadj_lod <- max(sum$lod.p.mu[j], sum$lod.p[j], sum$lod.mu[j])
+          lod_col <- which.max(c(sum$lod.p[j], sum$lod.mu[j])) # lod.p.mu is the sum, so want to know which is the main driver of p and mu 
+          qtl_driver <- ifelse(lod_col == 1, "binary", "continuous")
+        } else if (group == "GxT"){
+          unadj_negLogP <- max(sum$p_overall[j], sum$p_G[j], sum$p_GxT[j]) 
+          lod_col <- which.max(c(sum$p_overall[j], sum$p_G[j], sum$p_GxT[j]))
+          qtl_driver <- ifelse(lod_col == 2, "genetic", 
+                               ifelse(lod_col == 3, "GxT", "overall"))
+        } else { 
+          unadj_negLogP <- sum$pval[j]
+          lod_col <- 1
+        }
+        
+        # chr:position(interval)
+        chr <- sum$chr[j]
+        bayesint_j <- bayesint(mod, chr = chr, lodcolumn = lod_col)
+        lwr <- bayesint_j[1,"pos"]
+        upr <- bayesint_j[3,"pos"]
+        chr_pos <- paste0("Chr ", chr, ": ", 
+                          format(round(sum$pos[j], 2), nsmall = 2), 
+                          " (", format(round(lwr, 2), nsmall = 2), "-", 
+                          format(round(upr,2), nsmall = 2), ")")
+        
+        # genome-wide adjusted p-value 
+        if (pheno != "Titer"){
+          adjP <- pevd(q = unadj_negLogP, loc = fevdsum$par[1], scale = fevdsum$par[2], shape = fevdsum$par[3], lower.tail = FALSE)
+        } else {
+          fevdsum <- summary(fevd(mod[[2+lod_col]]))
+          adjP <- pevd(q = unadj_lod, loc = fevdsum$par[1], scale = fevdsum$par[2], shape = fevdsum$par[3], lower.tail = FALSE)
+        }
+        # experiment-wide (FDR) adjusted q-value 
+        qval <- q_from_p(adjP)
+        
+        # variance explained by QTL 
+        cov_list <- c("sex")
+        if (chr == "X"){ cov_list <- c(cov_list, "pgm") }
+        if (group == "GxT"){ cov_list <- c(cov_list, "infection") }
+        var_expl <- get_var_expl(cross = cross_g, pheno = pheno_data, marker = rownames(sum)[j], cov_list = cov_list, gxt = (group == "GxT"))
+        
+        all_qtl[ix,] <- c(group, pheno, chr, sum$pos[j], lwr, upr, unadj_negLogP, adjP, qval, var_expl$h2, var_expl$add_effect)
       }
-      # experiment-wide (FDR) adjusted q-value 
-      qval <- q_from_p(adjP)
-      
-      # variance explained by QTL 
-      cov_list <- c("sex")
-      if (chr == "X"){ cov_list <- c(cov_list, "pgm") }
-      if (group == "GxT"){ cov_list <- c(cov_list, "infection") }
-      var_expl <- get_var_expl(cross = cross_g, pheno = pheno_data, marker = rownames(sum)[j], cov_list = cov_list, gxt = (group == "GxT"))
-      
-      all_qtl[ix,] <- c(group, pheno, chr, sum$pos[j], lwr, upr, unadj_negLogP, adjP, qval, var_expl$h2, var_expl$add_effect)
     }
   }
+  write_csv(all_qtl, all_qtl_fname)
 }
-
-write_csv(all_qtl, "results/qtl_mapping/all_qtl.csv")
 
 # ----------------------------remove duplicates------------------------------- #
 condensed_qtl <- all_qtl %>%
@@ -405,21 +439,20 @@ condensed_qtl <- all_qtl %>%
            TRUE ~ ""),
          inf_sig = paste0(infection, sig)) %>%
   group_by(chr, phenotype) %>%
-  summarise(
-    inf_sig1 = inf_sig[which.min(qval)],
-    inf_sig_rest = paste(inf_sig[!(inf_sig %in% inf_sig1)], collapse = ", "),
-    infection_sig = paste0(inf_sig1, ifelse(inf_sig_rest != "", ", ", ""), inf_sig_rest),
-    infection_detect = {
-      infs <- unique(infection[qval < 0.05])
-      paste(infs, collapse = ",")
-    },
-    pos = as.numeric(pos[which.min(qval)]),               
-    CI_lwr_conservative = min(CI_lwr, na.rm = TRUE),       
-    CI_upr_conservative = max(CI_upr, na.rm = TRUE),       
-    CI_lwr_liberal = max(CI_lwr, na.rm = TRUE),
-    CI_upr_liberal = min(CI_upr, na.rm = TRUE),
-    var_expl = as.numeric(var_explained[which.min(qval)]),
-    qval = min(qval, na.rm = TRUE)) %>%
+  dplyr::summarise(inf_sig1 = inf_sig[which.min(qval)],
+                  inf_sig_rest = paste(inf_sig[!(inf_sig %in% inf_sig1)], collapse = ", "),
+                  infection_sig = paste0(inf_sig1, ifelse(inf_sig_rest != "", ", ", ""), inf_sig_rest),
+                  infection_detect = {
+                    infs <- unique(infection[qval < 0.05])
+                    paste(infs, collapse = ",")
+                  },
+                  pos = as.numeric(pos[which.min(qval)]),
+                  CI_lwr_conservative = min(CI_lwr, na.rm = TRUE),
+                  CI_upr_conservative = max(CI_upr, na.rm = TRUE),
+                  CI_lwr_liberal = max(CI_lwr, na.rm = TRUE),
+                  CI_upr_liberal = min(CI_upr, na.rm = TRUE),
+                  var_expl = as.numeric(var_explained[which.min(qval)]),
+                  qval = min(qval, na.rm = TRUE)) %>%
   ungroup() %>%
   select(-inf_sig1, -inf_sig_rest) %>%
   filter(qval <= 0.10) %>% # only select QTL with at least one association where q < 0.1
@@ -434,7 +467,6 @@ condensed_qtl <- all_qtl %>%
   arrange(sig_level, as.numeric(chr))
 
 write_csv(condensed_qtl, "results/qtl_mapping/condensed_qtl.csv")
-#condensed_qtl <- read_csv("results/qtl_mapping/condensed_qtl.csv")
 
 # how many control QTL?
 condensed_qtl %>%
@@ -461,10 +493,6 @@ var_expl_1c <- qtl1C$var_expl
 t.test(var_expl_2, var_expl_1c, var.equal = FALSE)
 # yes, mean of SARS2 QTL = 35.5%, mean of control/SARS QTL = 12.4%
 
-
-
-
-
 # -----------------------------create pub tables------------------------------ #
 cond_qtl_disp <- condensed_qtl %>% 
   left_join(pheno_names, by = c("phenotype" = "flow_col_name")) %>%
@@ -484,7 +512,7 @@ qtl_by_infection <- cond_qtl_disp %>%
          has_1 = str_detect(infection_sig, "1"),
          has_2 = str_detect(infection_sig, "2")) %>%
   group_by(qtl_id) %>%
-  summarise(Control = any(has_C),
+  dplyr::summarise(Control = any(has_C),
             SARS = any(has_1),
             SARS2 = any(has_2),
             .groups = "drop") %>% 
@@ -509,7 +537,7 @@ gxt_only_qtl <- condensed_qtl %>%
   mutate(
     has_A_sig = str_detect(infection_sig, "A\\*\\*+"),  # A has ** or ***
     has_strat_sig = str_detect(infection_sig, "[C12]\\*\\*+")  # C, 1, or 2 has ** or ***
-  ) %>%
+    ) %>%
   filter(has_A_sig & !has_strat_sig) %>%
   select(-has_A_sig, -has_strat_sig)
 dim(gxt_only_qtl)
@@ -543,13 +571,11 @@ t.test(var_expl_gxt, var_expl_strat, var.equal = FALSE)
 # ----------------------------summaries for Fig 4----------------------------- #
 # Create binary indicators for each group's presence (regardless of significance level)
 qtl_presence <- condensed_qtl %>%
-  mutate(
-    has_C = str_detect(infection_sig, "C"),
-    has_1 = str_detect(infection_sig, "1"),
-    has_2 = str_detect(infection_sig, "2"),
-    has_A = str_detect(infection_sig, "A"),
-    qtl_id = paste(chr, phenotype, sep = ":")
-  )
+  mutate(has_C = str_detect(infection_sig, "C"),
+         has_1 = str_detect(infection_sig, "1"),
+         has_2 = str_detect(infection_sig, "2"),
+         has_A = str_detect(infection_sig, "A"),
+         qtl_id = paste(chr, phenotype, sep = ":"))
 
 # create list format for upset plot - each element is a vector of qtl_ids present in that group
 qtl_sets <- list(
@@ -575,7 +601,7 @@ upset_plot
 grid.edit("arrange", name = "upset")
 us_grob <- grid.grab()
 upset_plot <- us_grob
-grid.arrange(us_grob, var_hm)
+#grid.arrange(us_grob, var_hm)
 
 # fit <- euler(qtl_sets)
 # plot(fit, quantities = TRUE)  
@@ -592,7 +618,7 @@ for (i in pheno_rows){
   df[[geno_colname]] <- geno
 }
 summary(lm(pheno ~ geno7 + geno10 + geno16, data = df))
-
+# yes 
 
 # --------------------------------LM per QTL---------------------------------- #
 # fit same linear model for all QTL, save beta, p-val, and variance explained by 
@@ -665,7 +691,8 @@ for (i in 1:nrow(condensed_qtl)){
       dom_qtl[dom_ix,] <- c(chr_i, pos_i, pheno_name, group, IDd_in_grp, signif(addP, 2), signif(domP, 2))
       # plot PxG for dominant QTL
       cross_g <- subset(cross, ind = (cross$pheno$infection == group))
-      pxg_fname <- paste0("figures/qtl_pxg_dom/", group, "_chr", chr_i, "_", pheno_name, ".png")
+      ensure_directory("figures/qtl_mapping/qtl_pxg_dom")
+      pxg_fname <- paste0("figures/qtl_mapping/qtl_pxg_dom/", group, "_chr", chr_i, "_", pheno_name, ".png")
       png(pxg_fname)
       print(pxg(cross_g, pheno = cross_data[cross_data$infection == group, pheno_name][[1]], marker = marker_i, geno.map = geno_map))
       dev.off()
@@ -771,6 +798,7 @@ effect_hm <- ggplot(lm_df, aes(x = qtl_id, y = infection, fill = plot_value_scal
 #              linewidth = 0.7)
 # }
 
+ensure_directory("figures/qtl_mapping")
 ggsave("figures/qtl_mapping/effect_heatmap.png", width = 8.5, height = 4)
 
 # -----------------------variance decomposition per QTL------------------------ #
@@ -820,7 +848,6 @@ var_hm <- ggplot(qtl_var_long, aes(x = qtl_label,
         legend.title = element_text(size = 10),
         legend.margin = margin(l = -5),
         panel.spacing = unit(0, "pt"))
-
 
 # get QTL positions for labeling QTL
 qtl_positions_multi <- lm_df %>%
@@ -916,7 +943,6 @@ fig3 <- plot_grid(qtl_hm, NULL,
                                       labels = c("C", "", "D"), align = "v", axis = "lr"),
                             nrow = 2, rel_heights = c(1,2), labels = c("B", ""), hjust = -5),
                   ncol = 3, rel_widths = c(0.9, -0.08, 1), labels = c("A", "", ""))
-fig3
 ggsave("figures/Figure3.png", width = 12.5, height = 8, bg = "white")
 
 
@@ -935,7 +961,6 @@ qtl_vc_barplot <- ggplot(qtl_var_long, aes(x = reorder(qtl_label, total_partR2),
   theme(legend.position = c(0.6,0.3),
         legend.background = element_rect(fill = "white", color = NA)) + 
   guides(fill = guide_legend(reverse = TRUE))
-qtl_vc_barplot
 ggsave("figures/qtl_mapping/partialR2_by_component.png", height = 8, width = 6)
 
 # histogram
@@ -948,8 +973,6 @@ qtl_vc_hist <- ggplot(qtl_var_long, aes(x = partial_R2*100, fill = component)) +
        title = "Variance explained by genetic components") +
   theme_minimal() + 
   guides(fill = guide_legend(reverse = TRUE))
-qtl_vc_hist 
-
 
 qtl_heat <- all_qtl %>%
   filter(infection %in% strat_groups) %>%
@@ -960,20 +983,12 @@ qtl_heat <- all_qtl %>%
 # fill in betas for nominally significant effects 
 ggplot(qtl_heat, aes(x = infection, y = qtl_id, fill = beta)) +
   geom_tile(color = "white", linewidth = 0.3) +
-  scale_fill_gradient2(
-    low = "red",
-    mid = "grey95",
-    high = "blue",
-    midpoint = 0,
-    na.value = "grey80",
-    name = "beta"
-  ) +
+  scale_fill_gradient2(low = "red", mid = "grey95", high = "blue",
+                       midpoint = 0, na.value = "grey80", name = "beta") +
   labs(x = NULL, y = NULL, title = "QTL effects across control and infected groups") +
   theme_minimal() +
-  theme(
-    panel.grid = element_blank(),
-    axis.text.y = element_text(size = 9)
-  )
+  theme(panel.grid = element_blank(),
+        axis.text.y = element_text(size = 9))
 
 
 
