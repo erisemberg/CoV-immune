@@ -1,7 +1,5 @@
 # CoV-immune
 
-NOTE 6/1/26: this repo is in progress. All code and data to generate results are present, but container / workflow testing is ongoing. Workflow has been tested through "QTL mapping."
-
 Environment prep
 -----------------------
 This project uses a Docker container to produce an environment similar to that used in the original analysis (i.e. R v4.4.1 and R package versions available in March, 2026). In order to run this container you will need [Docker](https://docs.docker.com/get-docker/) installed. 
