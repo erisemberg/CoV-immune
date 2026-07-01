@@ -888,8 +888,8 @@ bmediatR_v0 <- function(y, M, X,
   }
 
   #compute H1 and H3 outside of the mediator loop (invariant)
-  if (calc_ln_prob_data[1]) { ln_prob_data1 <- bmediatR:::dmvt_chol(y, sigma_chol=sigma1_chol, df = kappa[1]) }
-  if (calc_ln_prob_data[3]) { ln_prob_data3 <- bmediatR:::dmvt_chol(y, sigma_chol=sigma3_chol, df = kappa[3]) }
+  if (calc_ln_prob_data[1]) { ln_prob_data1 <- dmvt_chol(y, sigma_chol=sigma1_chol, df = kappa[1]) }
+  if (calc_ln_prob_data[3]) { ln_prob_data3 <- dmvt_chol(y, sigma_chol=sigma3_chol, df = kappa[3]) }
 
   #iterate over mediators
   for (i in 1:ncol(M)) {
@@ -915,12 +915,12 @@ bmediatR_v0 <- function(y, M, X,
     if (calc_ln_prob_data[1]){ln_prob_data[i,1] <- ln_prob_data1}
     if (calc_ln_prob_data[3]){ln_prob_data[i,3] <- ln_prob_data3}
 
-    if (calc_ln_prob_data[2]){ln_prob_data[i,2] <- bmediatR:::dmvt_chol(y, sigma_chol=sigma2_chol, df = kappa[2])}
-    if (calc_ln_prob_data[4]){ln_prob_data[i,4] <- bmediatR:::dmvt_chol(y, sigma_chol=sigma4_chol, df = kappa[4])}
-    if (calc_ln_prob_data[5]){ln_prob_data[i,5] <- bmediatR:::dmvt_chol(m, sigma_chol=sigma5_chol, df = kappa[5])}
-    if (calc_ln_prob_data[6]){ln_prob_data[i,6] <- bmediatR:::dmvt_chol(m, sigma_chol=sigma6_chol, df = kappa[6])}
-    if (calc_ln_prob_data[7]){ln_prob_data[i,7] <- bmediatR:::dmvt_chol(m, sigma_chol=sigma7_chol, df = kappa[7])}
-    if (calc_ln_prob_data[8]){ln_prob_data[i,8] <- bmediatR:::dmvt_chol(m, sigma_chol=sigma8_chol, df = kappa[8])}
+    if (calc_ln_prob_data[2]){ln_prob_data[i,2] <- dmvt_chol(y, sigma_chol=sigma2_chol, df = kappa[2])}
+    if (calc_ln_prob_data[4]){ln_prob_data[i,4] <- dmvt_chol(y, sigma_chol=sigma4_chol, df = kappa[4])}
+    if (calc_ln_prob_data[5]){ln_prob_data[i,5] <- dmvt_chol(m, sigma_chol=sigma5_chol, df = kappa[5])}
+    if (calc_ln_prob_data[6]){ln_prob_data[i,6] <- dmvt_chol(m, sigma_chol=sigma6_chol, df = kappa[6])}
+    if (calc_ln_prob_data[7]){ln_prob_data[i,7] <- dmvt_chol(m, sigma_chol=sigma7_chol, df = kappa[7])}
+    if (calc_ln_prob_data[8]){ln_prob_data[i,8] <- dmvt_chol(m, sigma_chol=sigma8_chol, df = kappa[8])}
   }
 
   #compute posterior probabilities for all cases
@@ -1277,7 +1277,7 @@ bmediatR <- function(y, M, X,
                               "0,-,-", "1,-,-", "0,*,-", "1,*,-")
 
   #identify batches of M that have the same pattern of missing values
-  missing_m <- bmediatR:::batch_cols(M)
+  missing_m <- batch_cols(M)
 
   #iterate over batches of M with same pattern of missing values
   if (verbose) { print("Iterating", quote = FALSE) }
@@ -1312,8 +1312,8 @@ bmediatR <- function(y, M, X,
       }
 
       #compute H1 and H3 outside of the mediator loop (invariant)
-      if (calc_ln_prob_data[1]) { ln_prob_data1 <- bmediatR:::dmvt_chol(y_subset, sigma_chol=sigma1_chol_subset, df = kappa[1]) }
-      if (calc_ln_prob_data[3]) { ln_prob_data3 <- bmediatR:::dmvt_chol(y_subset, sigma_chol=sigma3_chol_subset, df = kappa[3]) }
+      if (calc_ln_prob_data[1]) { ln_prob_data1 <- dmvt_chol(y_subset, sigma_chol=sigma1_chol_subset, df = kappa[1]) }
+      if (calc_ln_prob_data[3]) { ln_prob_data3 <- dmvt_chol(y_subset, sigma_chol=sigma3_chol_subset, df = kappa[3]) }
 
       #iterate over mediators
       for (i in missing_m[[b]]$cols) {
@@ -1341,12 +1341,12 @@ bmediatR <- function(y, M, X,
         if (calc_ln_prob_data[1]){ln_prob_data[i,1] <- ln_prob_data1}
         if (calc_ln_prob_data[3]){ln_prob_data[i,3] <- ln_prob_data3}
 
-        if (calc_ln_prob_data[2]){ln_prob_data[i,2] <- bmediatR:::dmvt_chol(y_subset, sigma_chol=sigma2_chol_subset, df = kappa[2])}
-        if (calc_ln_prob_data[4]){ln_prob_data[i,4] <- bmediatR:::dmvt_chol(y_subset, sigma_chol=sigma4_chol_subset, df = kappa[4])}
-        if (calc_ln_prob_data[5]){ln_prob_data[i,5] <- bmediatR:::dmvt_chol(m_subset, sigma_chol=sigma5_chol_subset, df = kappa[5])}
-        if (calc_ln_prob_data[6]){ln_prob_data[i,6] <- bmediatR:::dmvt_chol(m_subset, sigma_chol=sigma6_chol_subset, df = kappa[6])}
-        if (calc_ln_prob_data[7]){ln_prob_data[i,7] <- bmediatR:::dmvt_chol(m_subset, sigma_chol=sigma7_chol_subset, df = kappa[7])}
-        if (calc_ln_prob_data[8]){ln_prob_data[i,8] <- bmediatR:::dmvt_chol(m_subset, sigma_chol=sigma8_chol_subset, df = kappa[8])}
+        if (calc_ln_prob_data[2]){ln_prob_data[i,2] <- dmvt_chol(y_subset, sigma_chol=sigma2_chol_subset, df = kappa[2])}
+        if (calc_ln_prob_data[4]){ln_prob_data[i,4] <- dmvt_chol(y_subset, sigma_chol=sigma4_chol_subset, df = kappa[4])}
+        if (calc_ln_prob_data[5]){ln_prob_data[i,5] <- dmvt_chol(m_subset, sigma_chol=sigma5_chol_subset, df = kappa[5])}
+        if (calc_ln_prob_data[6]){ln_prob_data[i,6] <- dmvt_chol(m_subset, sigma_chol=sigma6_chol_subset, df = kappa[6])}
+        if (calc_ln_prob_data[7]){ln_prob_data[i,7] <- dmvt_chol(m_subset, sigma_chol=sigma7_chol_subset, df = kappa[7])}
+        if (calc_ln_prob_data[8]){ln_prob_data[i,8] <- dmvt_chol(m_subset, sigma_chol=sigma8_chol_subset, df = kappa[8])}
       }
     }
   }
@@ -1454,7 +1454,7 @@ bmediatR_GxT <- function(y, M, X, group,
   y_models <- expand.grid(b1 = 0:1, b2 = 0:1, c1 = 0:1, c2 = 0:1)
   M_models <- expand.grid(a1 = 0:1, a2 = 0:1)
   
-  # likelihood models for all hypothesis
+  # likelihood models for all hypotheses
   # hypotheses encoded by presence (1) or absence (0) of 'x->m, m->y, x->y' edges on the DAG
   # H1:  '-,-,0,0,0,0' / y does not depend on X or m 
   # H2:  '-,-,1,0,0,0' / y depends on m in group 1 
@@ -1520,7 +1520,7 @@ bmediatR_GxT <- function(y, M, X, group,
       sigma_chol <- chol(sigma)
       
       # compute likelihood
-      ln_prob_M[m_idx] <- bmediatR:::dmvt_chol(m, sigma_chol = sigma_chol, df = kappa[2])
+      ln_prob_M[m_idx] <- dmvt_chol(m, sigma_chol = sigma_chol, df = kappa[2])
     }
     
     # compute likelihoods for 16 outcome models 
@@ -1560,7 +1560,7 @@ bmediatR_GxT <- function(y, M, X, group,
       sigma_chol <- chol(sigma)
       
       # compute likelihood
-      ln_prob_y[y_idx] <- bmediatR:::dmvt_chol(y, sigma_chol = sigma_chol, df = kappa[1])
+      ln_prob_y[y_idx] <- dmvt_chol(y, sigma_chol = sigma_chol, df = kappa[1])
     }
     
     # combine into 64 joint likelihoods (4 × 16 = 64)
@@ -1786,7 +1786,7 @@ bmediatR_GxT3 <- function(y, M, X, group,
       sigma_chol <- chol(sigma)
       
       # compute likelihood
-      ln_prob_M[m_idx] <- bmediatR:::dmvt_chol(m, sigma_chol = sigma_chol, df = kappa[2])
+      ln_prob_M[m_idx] <- dmvt_chol(m, sigma_chol = sigma_chol, df = kappa[2])
     }
     
     # compute likelihoods for 16 outcome models 
@@ -1817,7 +1817,7 @@ bmediatR_GxT3 <- function(y, M, X, group,
       sigma_chol <- chol(sigma)
       
       # compute likelihood
-      ln_prob_y[y_idx] <- bmediatR:::dmvt_chol(y, sigma_chol = sigma_chol, df = kappa[1])
+      ln_prob_y[y_idx] <- dmvt_chol(y, sigma_chol = sigma_chol, df = kappa[1])
     }
     
     # combine into 64 joint likelihoods (4 × 16 = 64)
@@ -1998,8 +1998,8 @@ bmediatR_GxTv2 <- function(y, M, X, group,
       sigma_M2_chol <- chol(sigma_M2)
       
       # compute likelihoods
-      ln_prob_M1 <- bmediatR:::dmvt_chol(m[grp1_idx], sigma_chol = sigma_M1_chol, df = kappa[3])
-      ln_prob_M2 <- bmediatR:::dmvt_chol(m[grp2_idx], sigma_chol = sigma_M2_chol, df = kappa[4])
+      ln_prob_M1 <- dmvt_chol(m[grp1_idx], sigma_chol = sigma_M1_chol, df = kappa[3])
+      ln_prob_M2 <- dmvt_chol(m[grp2_idx], sigma_chol = sigma_M2_chol, df = kappa[4])
       ln_prob_M[m_idx] <- ln_prob_M1 + ln_prob_M2
     }
     
@@ -2050,8 +2050,8 @@ bmediatR_GxTv2 <- function(y, M, X, group,
       sigma_y2_chol <- chol(sigma_y2)
       
       # compute likelihoods
-      ln_prob_y1 <- bmediatR:::dmvt_chol(y[grp1_idx], sigma_chol = sigma_y1_chol, df = kappa[1])
-      ln_prob_y2 <- bmediatR:::dmvt_chol(y[grp2_idx], sigma_chol = sigma_y2_chol, df = kappa[2])
+      ln_prob_y1 <- dmvt_chol(y[grp1_idx], sigma_chol = sigma_y1_chol, df = kappa[1])
+      ln_prob_y2 <- dmvt_chol(y[grp2_idx], sigma_chol = sigma_y2_chol, df = kappa[2])
       ln_prob_y[y_idx] <- ln_prob_y1 + ln_prob_y2
     }
     

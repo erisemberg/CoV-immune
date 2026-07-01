@@ -154,3 +154,9 @@ Run mediation analysis and create Figure 4:
 Rscript mediation.R
 ```
 
+This code will generate:
+1. Mediation analysis results in `results/mediation/SuppTable3-mediation.xlsx`.
+2. Figure 4 in `figures/Figure4.png` 
+3. Posterior probability plots for all mediation analyses, including those not featured in Fig. 4, in `figures/mediation/`.
+
+*Note that QTL IDs used in figures are based on `qtl_map.csv` and `dis_qtl_map.csv` provided in `source_data\`, since QTL IDs were determined manually rather than programmatically after QTL mapping analysis was performed.*

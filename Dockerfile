@@ -39,6 +39,7 @@ RUN R -e "install.packages('ComplexHeatmap')"
 RUN R -e "install.packages('patchwork')"
 RUN R -e "install.packages('ggridges')"
 RUN R -e "install.packages('gridExtra')"
+RUN R -e "install.packages('ggplotify')"
 
 # Bayesian sampling 
 RUN R -e "install.packages('matrixStats')"

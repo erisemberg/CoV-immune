@@ -3,8 +3,10 @@ library(readxl)
 library(qtl)
 library(ggplot2)
 library(cowplot)
+library(ggplotify)
 source("code-dependencies/cov_qtl_functions.R")
 source("code-dependencies/bmediatR-master/R/bmediatR.R")
+source("code-dependencies/bmediatR-master/R/plot_mediation.R")
 
 # ---------------------------------load data---------------------------------- #
 cross_data <- read_csv("derived_data/cross_data.csv")
@@ -32,17 +34,22 @@ group_lookup <- c("C" = "PBS", "1" = "SARSCoV", "2" = "SARS2CoV", "A" = "GxT")
 
 geno_map <- list(A = "CC006", B = "CC044")
 
-qtl_map <- read_csv("results/qtl_map.csv")
-dis_qtl_map <- read_csv("results/dis_qtl_map.csv")
+qtl_map <- read_csv("source_data/qtl_map.csv")
+dis_qtl_map <- read_csv("source_data/Leist2024_QTL/dis_qtl_map.csv")
 
 condensed_qtl <- read_csv("results/qtl_mapping/condensed_qtl.csv")
 
 imp_phenos_df <- read_csv("results/var_selection/important_phenos.csv")
 important_phenos <- imp_phenos_df$phenotype[imp_phenos_df$stable]
 
+bf_thresh <- 0.5
+
+ensure_directory("figures/mediation")
+ensure_directory("results/mediation")
+
 # ---------------------------load Leist (2024) QTL---------------------------- #
 # load QTL from Leist (2024)
-disease_qtl <- read_csv("results/qtl_mapping/leist_qtl.csv")
+disease_qtl <- read_csv("source_data/Leist2024_QTL/leist_qtl.csv")
 wt_loss_phenos <- c("Weight loss (2 dpi)", "Weight loss (3 dpi)", "Weight loss (4 dpi)", "Weight loss (AAC)")
 
 # condense across infections 
@@ -86,7 +93,7 @@ if(file.exists(med_fname)){
   message("Running mediation analysis on immune QTL...")
   
   med_gxt_all <- data.frame(
-    chr = character(), marker = character(), 
+    source = character(), chr = character(), marker = character(), 
     immune_pheno = character(), disease_pheno = character(), analysis = character(),
     BFmed_any = numeric(), BFmed_grp1 = numeric(), BFmed_grp2 = numeric(), BFmed_grp3 = numeric(),
     BFcomp_any = numeric(), BFcomp_grp1 = numeric(), BFcomp_grp2 = numeric(), BFcomp_grp3 = numeric(),
@@ -122,19 +129,8 @@ if(file.exists(med_fname)){
         X <- model.matrix(~ X, data = df)[,-1, drop = FALSE] 
         group_med <- as.numeric(df$infection == "SARS2CoV") 
         
-        # define weights for y and M to handle variance heterogeneity
-        df$y <- scale(df$y)
-        fit_y <- lm(y ~ sex + infection, data = df)
-        res <- resid(fit_y)
-        s2_y1 <- var(res[group_med == 0])
-        s2_y2 <- var(res[group_med == 1])
-        wts_y <- ifelse(group_med == 0, 1/s2_y1, 1/s2_y2)
-        
-        fit_m <- lm(M ~ sex + infection, data = df)
-        res <- resid(fit_m)
-        s2_m1 <- var(res[group_med == 0])
-        s2_m2 <- var(res[group_med == 1])
-        wts_M <- ifelse(group_med == 0, 1/s2_m1, 1/s2_m2)
+        wts_y <- create_wts(df, var_name = "y", group = group_med, scale_var = TRUE)
+        wts_M <- create_wts(df, var_name = "M", group = group_med, scale_var = FALSE)
         
         # run bmediatR 
         med_gxt <- bmediatR_GxT(y = df$y, M = M, X = X, Z = Z, 
@@ -151,23 +147,8 @@ if(file.exists(med_fname)){
         group_med <- ifelse(df$infection == "SARS2CoV", 2, 
                             ifelse(df$infection == "SARSCoV", 1, 0))
         
-        # define weights for y and M to handle variance heterogeneity
-        df$y <- scale(df$y, center = TRUE, scale = TRUE)
-        fit_y <- lm(y ~ sex + infection, data = df)
-        res <- resid(fit_y)
-        s2_y0 <- var(res[group_med == 0])
-        s2_y1 <- var(res[group_med == 1])
-        s2_y2 <- var(res[group_med == 2])
-        wts_y <- ifelse(group_med == 2, 1/s2_y2, 
-                        ifelse(group_med == 1, 1/s2_y1, 1/s2_y0))
-        
-        fit_m <- lm(M ~ sex + infection, data = df)
-        res <- resid(fit_m)
-        s2_m0 <- var(res[group_med == 0])
-        s2_m1 <- var(res[group_med == 1])
-        s2_m2 <- var(res[group_med == 2])
-        wts_M <- ifelse(group_med == 2, 1/s2_m2, 
-                        ifelse(group_med == 1, 1/s2_m1, 1/s2_m0))
+        wts_y <- create_wts(df, var_name = "y", group = group_med, scale_var = TRUE)
+        wts_M <- create_wts(df, var_name = "M", group = group_med, scale_var = FALSE)
         
         # run bmediatR 
         med_gxt <- bmediatR_GxT3(y = df$y, M = M, X = X, Z = Z, 
@@ -177,7 +158,7 @@ if(file.exists(med_fname)){
       }
       
       BFmed <- signif(log10(exp(med_gxt$ln_post_odds) / exp(med_gxt$ln_prior_odds)), 2)
-      med_gxt_all[ix,] <- c(chr, marker, immune_pheno, disease_pheno, analysis,
+      med_gxt_all[ix,] <- c("imm_QTL", chr, marker, immune_pheno, disease_pheno, analysis,
                             BFmed[1,"mediation_any"], BFmed[1,"mediation_grp1"], BFmed[1,"mediation_grp2"],
                             ifelse(analysis == "3group", BFmed[1,"mediation_grp3"], NA),
                             BFmed[1,"complete_any"], BFmed[1,"complete_grp1"], BFmed[1,"complete_grp2"],
@@ -186,7 +167,7 @@ if(file.exists(med_fname)){
                             ifelse(analysis == "3group", BFmed[1,"partial_grp3"], NA))
       
       # save posterior bar plot to png 
-      save_fname <- paste0("figures/mediation/GxT/", immune_pheno, "_", disease_pheno, "_chr", chr, ".png")
+      save_fname <- paste0("figures/mediation/", immune_pheno, "_", disease_pheno, "_chr", chr, ".png")
       png(save_fname, width = 450, height = 300)
       if (analysis == "2group"){
         print(plot_posterior_bar_gxt(med_gxt, mediator_id = immune_pheno, grp_name = "Infection",
@@ -237,19 +218,8 @@ if(file.exists(med_fname)){
         X <- model.matrix(~ X, data = df)[,-1, drop = FALSE] 
         group_med <- as.numeric(df$infection == "SARS2CoV") 
         
-        # define weights for y and M to handle variance heterogeneity
-        df$y <- scale(df$y)
-        fit_y <- lm(y ~ sex + infection, data = df)
-        res <- resid(fit_y)
-        s2_y1 <- var(res[group_med == 0])
-        s2_y2 <- var(res[group_med == 1])
-        wts_y <- ifelse(group_med == 0, 1/s2_y1, 1/s2_y2)
-        
-        fit_m <- lm(M ~ sex + infection, data = df)
-        res <- resid(fit_m)
-        s2_m1 <- var(res[group_med == 0])
-        s2_m2 <- var(res[group_med == 1])
-        wts_M <- ifelse(group_med == 0, 1/s2_m1, 1/s2_m2)
+        wts_y <- create_wts(df, var_name = "y", group = group_med, scale_var = TRUE)
+        wts_M <- create_wts(df, var_name = "M", group = group_med, scale_var = FALSE)
         
         med_gxt <- bmediatR_GxT(y = df$y, M = M, X = X, Z = Z, 
                                 group = group_med, w_y = wts_y, w_M = wts_M,
@@ -264,23 +234,8 @@ if(file.exists(med_fname)){
         group_med <- ifelse(df$infection == "SARS2CoV", 2, 
                             ifelse(df$infection == "SARSCoV", 1, 0))
         
-        # define weights for y and M to handle variance heterogeneity
-        df$y <- scale(df$y, center = TRUE, scale = TRUE)
-        fit_y <- lm(y ~ sex + infection, data = df)
-        res <- resid(fit_y)
-        s2_y0 <- var(res[group_med == 0])
-        s2_y1 <- var(res[group_med == 1])
-        s2_y2 <- var(res[group_med == 2])
-        wts_y <- ifelse(group_med == 2, 1/s2_y2, 
-                        ifelse(group_med == 1, 1/s2_y1, 1/s2_y0))
-        
-        fit_m <- lm(M ~ sex + infection, data = df)
-        res <- resid(fit_m)
-        s2_m0 <- var(res[group_med == 0])
-        s2_m1 <- var(res[group_med == 1])
-        s2_m2 <- var(res[group_med == 2])
-        wts_M <- ifelse(group_med == 2, 1/s2_m2, 
-                        ifelse(group_med == 1, 1/s2_m1, 1/s2_m0))
+        wts_y <- create_wts(df, var_name = "y", group = group_med, scale_var = TRUE)
+        wts_M <- create_wts(df, var_name = "M", group = group_med, scale_var = FALSE)
         
         med_gxt <- bmediatR_GxT3(y = df$y, M = M, X = X, Z = Z, 
                                  group = group_med, w_y = wts_y, w_M = wts_M,
@@ -289,7 +244,7 @@ if(file.exists(med_fname)){
       }
       
       BFmed <- signif(log10(exp(med_gxt$ln_post_odds) / exp(med_gxt$ln_prior_odds)), 2)
-      med_gxt_all[ix,] <- c(chr, marker, immune_pheno, disease_pheno, analysis,
+      med_gxt_all[ix,] <- c("dis_QTL", chr, marker, immune_pheno, disease_pheno, analysis,
                             BFmed[1,"mediation_any"], BFmed[1,"mediation_grp1"], BFmed[1,"mediation_grp2"],
                             ifelse(analysis == "3group", BFmed[1,"mediation_grp3"], NA),
                             BFmed[1,"complete_any"], BFmed[1,"complete_grp1"], BFmed[1,"complete_grp2"],
@@ -298,7 +253,7 @@ if(file.exists(med_fname)){
                             ifelse(analysis == "3group", BFmed[1,"partial_grp3"], NA))
       
       # save posterior bar plot to png 
-      save_fname <- paste0("figures/mediation/GxT/", cond_dis_qtl$qtl_id[i], "_", immune_pheno, "_", disease_pheno, ".png")
+      save_fname <- paste0("figures/mediation/", cond_dis_qtl$qtl_id[i], "_", immune_pheno, "_", disease_pheno, ".png")
       png(save_fname, width = 450, height = 300)
       if (analysis == "2group"){
         print(plot_posterior_bar_gxt(med_gxt, mediator_id = immune_pheno, grp_name = "Infection",
@@ -372,8 +327,6 @@ pos_tbl$marker <- rownames(pos_tbl)
 dis_qtl_map <- dis_qtl_map %>% 
   mutate(pos = signif(pos, 3))
 
-med_gxt_all$source <- c(rep("imm_QTL", 136), rep("dis_QTL", 103))
-  
 table2 <- med_gxt_all %>% 
   as_tibble() %>%
   mutate(across(starts_with("BF"), ~ suppressWarnings(as.numeric(.x)))) %>%
@@ -413,6 +366,7 @@ table2 <- med_gxt_all %>%
          grp_sars2, XM_sars2, MY_sars2, BFmed_sars2, BFcomp_sars2, BFpart_sars2) %>%
   filter(if_any(starts_with("BF"), ~ !is.na(.x) & .x > bf_thresh)) %>%
   arrange(as.numeric(chr))
+
 
 # table for publication 
 table2_long <- bind_rows(
@@ -546,7 +500,6 @@ trait_share_summary <- trait_share %>%
 trait_share_summary
 
 
-
 # ----------------------------------Figures----------------------------------- #
 inf_pal <- list("PBS" = "#66C2A5", "SARSCoV" = "#FC8D62", "SARS2CoV" = "#8DA0CB")
 gxt_pal <- c("black", rev(brewer.pal(n = 3, "Set1")[1:2]))
@@ -555,8 +508,6 @@ grouplabels = list("PBS" = "Control", "SARSCoV" = "SARS-CoV", "SARS2CoV" = "SARS
 # ---------------------------------------------------------------------------- #
 # -----------------------------------Fig 4------------------------------------ #
 # ---------------------------------------------------------------------------- #
-
-
 
 # ----------------------------Naive helper T cells---------------------------- #
 immune_pheno <- "L_HelpTCells_pctNaive"
@@ -581,6 +532,7 @@ df$dom <- geno_terms$dom
 anova(lm(Mtr ~ sex + add + dom, data = df[df$infection == "PBS",]), lm(Mtr ~ sex, data = df[df$infection == "PBS",])) 
 anova(lm(Mtr ~ sex + add + dom, data = df[df$infection == "SARSCoV",]), lm(Mtr ~ sex, data = df[df$infection == "SARSCoV",])) 
 anova(lm(Mtr ~ sex + add + dom, data = df[df$infection == "SARS2CoV",]), lm(Mtr ~ sex, data = df[df$infection == "SARS2CoV",])) 
+# based on above ANOVAs 
 sig_df <- data.frame(group = strat_groups,
                      label = c("p = 3.4e-9", "p = 2.9e-6", "p = 2.9e-3"),
                      vjust = c(1.2, 2.6, 4.0))
@@ -629,22 +581,10 @@ colnames(M) <- immune_pheno
 X <- model.matrix(~ geno, data = df)[,-1, drop = FALSE] # exposure matrix 
 group_med <- ifelse(df$infection == "SARS2CoV", 2, 
                     ifelse(df$infection == "SARSCoV", 1, 0))
+
 # define weights for y and M to handle variance heterogeneity
-df$y <- scale(df$y, center = TRUE, scale = TRUE)
-fit_y <- lm(y ~ sex + infection, data = df)
-res <- resid(fit_y)
-s2_y0 <- var(res[group_med == 0])
-s2_y1 <- var(res[group_med == 1])
-s2_y2 <- var(res[group_med == 2])
-wts_y <- ifelse(group_med == 2, 1/s2_y2, 
-                ifelse(group_med == 1, 1/s2_y1, 1/s2_y0))
-fit_m <- lm(Mtr ~ sex + infection, data = df)
-res <- resid(fit_m)
-s2_m0 <- var(res[group_med == 0])
-s2_m1 <- var(res[group_med == 1])
-s2_m2 <- var(res[group_med == 2])
-wts_M <- ifelse(group_med == 2, 1/s2_m2, 
-                ifelse(group_med == 1, 1/s2_m1, 1/s2_m0))
+wts_y <- create_wts(df, var_name = "y", group = group_med, scale_var = TRUE)
+wts_M <- create_wts(df, var_name = "Mtr", group = group_med, scale_var = FALSE)
 
 med_gxt <- bmediatR_GxT3(y = df$y, M = M, X = X, Z = Z, 
                          group = group_med, w_y = wts_y, w_M = wts_M,
@@ -774,22 +714,10 @@ colnames(M) <- immune_pheno
 X <- model.matrix(~ geno, data = df)[,-1, drop = FALSE] # exposure matrix 
 group_med <- ifelse(df$infection == "SARS2CoV", 2, 
                     ifelse(df$infection == "SARSCoV", 1, 0))
+
 # define weights for y and M to handle variance heterogeneity
-df$y <- scale(df$y, center = TRUE, scale = TRUE)
-fit_y <- lm(y ~ sex + infection, data = df)
-res <- resid(fit_y)
-s2_y0 <- var(res[group_med == 0])
-s2_y1 <- var(res[group_med == 1])
-s2_y2 <- var(res[group_med == 2])
-wts_y <- ifelse(group_med == 2, 1/s2_y2, 
-                ifelse(group_med == 1, 1/s2_y1, 1/s2_y0))
-fit_m <- lm(Mtr ~ sex + infection, data = df)
-res <- resid(fit_m)
-s2_m0 <- var(res[group_med == 0])
-s2_m1 <- var(res[group_med == 1])
-s2_m2 <- var(res[group_med == 2])
-wts_M <- ifelse(group_med == 2, 1/s2_m2, 
-                ifelse(group_med == 1, 1/s2_m1, 1/s2_m0))
+wts_y <- create_wts(df, var_name = "y", group = group_med, scale_var = TRUE)
+wts_M <- create_wts(df, var_name = "Mtr", group = group_med, scale_var = FALSE)
 
 med_gxt <- bmediatR_GxT3(y = df$y, M = M, X = X, Z = Z, 
                          group = group_med, w_y = wts_y, w_M = wts_M,
@@ -959,22 +887,10 @@ colnames(M) <- immune_pheno
 X <- model.matrix(~ geno, data = df)[,-1, drop = FALSE] # exposure matrix 
 group_med <- ifelse(df$infection == "SARS2CoV", 2, 
                     ifelse(df$infection == "SARSCoV", 1, 0))
+
 # define weights for y and M to handle variance heterogeneity
-df$y <- scale(df$y, center = TRUE, scale = TRUE)
-fit_y <- lm(y ~ sex + infection, data = df)
-res <- resid(fit_y)
-s2_y0 <- var(res[group_med == 0])
-s2_y1 <- var(res[group_med == 1])
-s2_y2 <- var(res[group_med == 2])
-wts_y <- ifelse(group_med == 2, 1/s2_y2, 
-                ifelse(group_med == 1, 1/s2_y1, 1/s2_y0))
-fit_m <- lm(Mtr ~ sex + infection, data = df)
-res <- resid(fit_m)
-s2_m0 <- var(res[group_med == 0])
-s2_m1 <- var(res[group_med == 1])
-s2_m2 <- var(res[group_med == 2])
-wts_M <- ifelse(group_med == 2, 1/s2_m2, 
-                ifelse(group_med == 1, 1/s2_m1, 1/s2_m0))
+wts_y <- create_wts(df, var_name = "y", group = group_med, scale_var = TRUE)
+wts_M <- create_wts(df, var_name = "Mtr", group = group_med, scale_var = FALSE)
 
 med_gxt <- bmediatR_GxT3(y = df$y, M = M, X = X, Z = Z, 
                          group = group_med, w_y = wts_y, w_M = wts_M,

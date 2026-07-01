@@ -15,6 +15,7 @@ library(snow)
 library(car)
 library(pzfx)
 library(ggh4x)
+library(ggplotify)
 source("code-dependencies/lmmultiresponse.R")
 source("code-dependencies/plot_modX.R")
 
@@ -260,6 +261,23 @@ fill_in_res <- function(pheno, fit){
   tmp[has_data] <- r
   
   return(tmp)
+}
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
+# create_wts: create group-specific weights 
+#+++++++++++++++++++++++++++++++++++++++++++++++++++
+create_wts <- function(df, var_name, group, scale_var = TRUE, formula_rhs = "sex + infection") {
+  if(scale_var){
+    df[[var_name]] <- scale(df[[var_name]], center = TRUE, scale = TRUE)
+  } 
+  
+  fit_y <- lm(as.formula(paste(var_name, "~", formula_rhs)), data = df)
+  res <- resid(fit_y)
+  
+  grp_var <- tapply(res, group, var)
+  wts <- 1 / grp_var[as.character(group)]
+  
+  return(unname(wts))
 }
 
 
@@ -1774,8 +1792,8 @@ make_qtl_scan <- function(flow_pheno, palette, incl_legend = TRUE, legend.x = 23
   mod0 <- readRDS(paste0("results/qtl_mapping/modRDS/PBS/", flow_pheno, ".rds"))
   mod1 <- readRDS(paste0("results/qtl_mapping/modRDS/SARS/", flow_pheno, ".rds"))
   mod2 <- readRDS(paste0("results/qtl_mapping/modRDS/SARS2/", flow_pheno, ".rds"))
-  mod0$p_SARS <- mod1$lod
-  mod0$p_SARS2 <- mod2$lod
+  mod0$p_SARS <- mod1$pval
+  mod0$p_SARS2 <- mod2$pval
   
   perm0 <- readRDS(paste0("results/qtl_mapping/permRDS/PBS/", flow_pheno, ".rds"))
   perm1 <- readRDS(paste0("results/qtl_mapping/permRDS/SARS/", flow_pheno, ".rds"))

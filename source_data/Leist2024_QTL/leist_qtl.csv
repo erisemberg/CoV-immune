@@ -1,0 +1,25 @@
+﻿qtl_id,infection,phenotype,chr_pos,adjP,var_expl
+HrS43,SARS-CoV,Weight loss (3 dpi),Chr 9: 120.98 (117.38-123.56),0.00028,13.76%
+HrS43,SARS-CoV,Weight loss (4 dpi),Chr 9: 123.56 (117.38-123.56),0.00079,9.13%
+HrS43,SARS-CoV,Weight loss (AAC),Chr 9: 120.98 (113.39-123.56),0.00156,7.46%
+HrS43,SARS-CoV,Weight loss (2 dpi),Chr 9: 99.89 (98.92-120.98),0.03884,12.85%
+HrS43,SARS-CoV,Congestion score,Chr 9: 122.63 (107.98-123.56),0.05685,4.89%
+HrS43,SARS-CoV-2,Weight loss (3 dpi),Chr 9: 118.88 (107.98-122.63),0.00051,16.73%
+HrS43,SARS-CoV-2,Congestion score,Chr 9: 123.56 (117.38-123.56),0.00063,7.11%
+HrS43,SARS-CoV-2,Weight loss (AAC),Chr 9: 120.98 (108.17-123.56),0.0086,7.45%
+HrS43,SARS-CoV-2,Weight loss (2 dpi),Chr 9: 120.98 (107.98-122.63),0.015,17.74%
+HrS44,SARS-CoV-2,Weight loss (3 dpi),Chr 7: 68.24 (51.71-84.03),0.00019,3.77%
+HrS44,SARS-CoV-2,Congestion score,Chr 7: 56.03 (51.71-84.03),0.001,5.51%
+HrS44,SARS-CoV-2,Weight loss (AAC),Chr 7: 67.86 (41.95-121.91),0.017,7.35%
+HrS44,SARS-CoV-2,Weight loss (2 dpi),Chr 7: 126.16 (51.71-131.68),0.027,10.91%
+HrS44,SARS-CoV-2,Weight loss (4 dpi),Chr 7: 68.24 (51.71-81.92),4.70E-05,5.22%
+HrS45,SARS-CoV-2,Weight loss (3 dpi),Chr 12: 29.10 (28.23-53.54),0.0093,0.65%
+HrS45,SARS-CoV-2,Weight loss (4 dpi),Chr 12: 53.54 (28.23-73.38),0.018,3.18%
+HrS45,SARS-CoV-2,Weight loss (AAC),Chr 12: 28.58 (28.23-73.38),0.063,6.24%
+HrS46,SARS-CoV,Weight loss (3 dpi),Chr 2: 34.53 (20.28-51.39),0.04533,0.78%
+HrS46,SARS-CoV,Weight loss (4 dpi),Chr 2: 34.53 (26.59-57.78),0.07249,0.07%
+HrS47,SARS-CoV,Weight loss (AAC),Chr 19: 6.68 (3.53-34.65),0.02314,5.64%
+HrS47,SARS-CoV,Weight loss (4 dpi),Chr 19: 34.65 (5.21-39.65),0.03195,1.95%
+HrS48,SARS-CoV-2,Weight loss (AAC),Chr 15: 87.41 (73.77-92.18),0.045,6.76%
+HrS48,SARS-CoV-2,Weight loss (3 dpi),Chr 15: 87.41 (73.77-101.56),0.095,22.23%
+HrS49,SARS-CoV-2,Weight loss (AAC),Chr 2: 163.22 (118.55-165.41),0.086,5.96%

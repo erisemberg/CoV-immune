@@ -437,16 +437,14 @@ plot_posterior_bar_gxt <- function(bmediatR_object,
       
       #nonmed_any         = rowSums(post_mat[, odds_index$other_nonmed_any,   drop = FALSE]),
       nonmed_grp1        = rowSums(post_mat[, odds_index$other_nonmed_grp1,  drop = FALSE]),
-      nonmed_grp2        = rowSums(post_mat[, odds_index$other_nonmed_grp2,  drop = FALSE])
-    )
+      nonmed_grp2        = rowSums(post_mat[, odds_index$other_nonmed_grp2,  drop = FALSE]))
   
   posterior_long <- posterior_wide %>%
     tidyr::pivot_longer(
       cols = -tidyselect::all_of(med_var),
       names_to = c("class", "grp"),
       names_sep = "_",
-      values_to = "post_p"
-    ) %>%
+      values_to = "post_p") %>%
     dplyr::mutate(
       class = dplyr::recode(class,
                             complete = "complete",
@@ -454,8 +452,7 @@ plot_posterior_bar_gxt <- function(bmediatR_object,
                             colocal  = "colocal",
                             nonmed   = "other non-\nmediation"),
       class = factor(class, levels = c("complete", "partial", "colocal", "other non-\nmediation")),
-      grp   = factor(grp, levels = c("grp1", "grp2"), labels = grp_labels)
-    ) 
+      grp   = factor(grp, levels = c("grp1", "grp2"), labels = grp_labels)) 
   
   # colors 
   base_cols <- c(
